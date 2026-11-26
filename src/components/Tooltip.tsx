@@ -1,16 +1,13 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 
-type Rect = [number, number, number, number];
-
 interface Props {
-  /** Tooltips open above the element, or below it when `prefer` is "below" (or when there is no room above). */
-  prefer?: "above" | "below";
-  /** Called with the tooltip's rectangle (CSS px) before it is shown, and with null when it goes away.
-   *  The overlay window uses it to add the tooltip to its visible region. */
-  onRect?: (rect: Rect | null) => Promise<unknown> | void;
+  /** Inline mode (the overlay): no bubble is drawn. The hovered element's tooltip text is handed to this
+   *  callback instead (and null when the pointer leaves), so the page can show it inside itself. */
+  inline?: (text: string | null) => void;
 }
 
 const SHOW_DELAY_MS = 450;
+const INLINE_DELAY_MS = 250;
 const GAP = 8;
 const EDGE = 4;
 
@@ -20,13 +17,13 @@ const EDGE = 4;
  * moving the text into `data-tip` while the pointer is over it, and put back
  * afterwards. Mount once per window.
  */
-export function TooltipLayer({ prefer = "above", onRect }: Props) {
+export function TooltipLayer({ inline }: Props) {
   const [tip, setTip] = useState<{ text: string; anchor: DOMRect } | null>(null);
   const [pos, setPos] = useState<{ x: number; y: number } | null>(null);
   const ref = useRef<HTMLDivElement>(null);
-  const onRectRef = useRef(onRect);
-  onRectRef.current = onRect;
-  const shown = useRef(false);
+  const inlineRef = useRef(inline);
+  inlineRef.current = inline;
+  const inlineShown = useRef(false);
 
   useEffect(() => {
     let timer: number | undefined;
@@ -40,9 +37,9 @@ export function TooltipLayer({ prefer = "above", onRect }: Props) {
         delete current.dataset.tip;
         current = null;
       }
-      if (shown.current) {
-        shown.current = false;
-        void onRectRef.current?.(null);
+      if (inlineShown.current) {
+        inlineShown.current = false;
+        inlineRef.current?.(null);
       }
       setTip(null);
       setPos(null);
@@ -58,7 +55,14 @@ export function TooltipLayer({ prefer = "above", onRect }: Props) {
       el.dataset.tip = text;
       el.removeAttribute("title");
       current = el;
-      timer = window.setTimeout(() => setTip({ text, anchor: el.getBoundingClientRect() }), SHOW_DELAY_MS);
+      if (inlineRef.current) {
+        timer = window.setTimeout(() => {
+          inlineShown.current = true;
+          inlineRef.current?.(text);
+        }, INLINE_DELAY_MS);
+      } else {
+        timer = window.setTimeout(() => setTip({ text, anchor: el.getBoundingClientRect() }), SHOW_DELAY_MS);
+      }
     };
 
     document.addEventListener("mouseover", over);
@@ -76,28 +80,19 @@ export function TooltipLayer({ prefer = "above", onRect }: Props) {
     };
   }, []);
 
-  // Measure the hidden tooltip, place it, tell the window about it, then show it.
+  // Measure the hidden tooltip, place it above (or below when there is no room), then show it.
   useLayoutEffect(() => {
     const el = ref.current;
     if (!tip || !el) return;
     const { width: w, height: h } = el.getBoundingClientRect();
     const a = tip.anchor;
     const above = a.top - GAP - h;
-    const below = a.bottom + GAP;
-    const fitsBelow = below + h <= window.innerHeight - EDGE;
-    const y = prefer === "below" ? (fitsBelow || above < EDGE ? below : above) : above >= EDGE ? above : below;
+    const y = above >= EDGE ? above : a.bottom + GAP;
     const x = Math.min(Math.max(a.left + a.width / 2 - w / 2, EDGE), Math.max(EDGE, window.innerWidth - w - EDGE));
-    let cancelled = false;
-    shown.current = true;
-    void Promise.resolve(onRectRef.current?.([x, y, w, h])).then(() => {
-      if (!cancelled) setPos({ x, y });
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, [tip, prefer]);
+    setPos({ x, y });
+  }, [tip]);
 
-  if (!tip) return null;
+  if (!tip || inline) return null;
   return (
     <div
       ref={ref}

@@ -51,3 +51,8 @@ Files Processed: 65 — COMPLETE
 - [2026-11-27T03:20:00Z] Settings card: clipped to its rounded corners and scrollbar track inset, so the scrollbar no longer pokes out at the corner.
 - [2026-11-27T03:40:00Z] Settings window height 640 -> 656 and less bottom padding: the Speech model tab scrolled although it fits (a card only scrolls when its rows really overflow).
 - [2026-11-27T04:00:00Z] Fix: dictated text appeared twice (tail buffer kept part of an already-transcribed utterance after a long leading pause); finished utterances are now cut off by stream position. Settings: icons on tabs, card headings, rows, segmented options and buttons.
+- [2026-11-27T04:30:00Z] Overlay tooltips now show inside the header (TooltipLayer inline) instead of a bubble that fell under the taskbar; dictation_overlay_tip and the tooltip region rectangle removed.
+- [2026-11-27T04:50:00Z] The shortcut shown in the Settings intro and the overlay idle hint uses prettyAccelerator (Win, not Super; Press/Hold follows the mode), same as the shortcut field.
+- [2026-11-27T05:10:00Z] Overlay: no tooltip on the drag area (the whole header showed a long hint); hint text in the header is plain, not italic.
+- [2026-11-27T05:30:00Z] Small pill: language chip and right-click language menu; bubble rectangle split from the menu rectangle (dictation_overlay_bubble).
+- [2026-11-27T05:50:00Z] Dropdowns (SearchSelect, overlay language menu) get a search box when they list more than 4 options (was 6 / always).

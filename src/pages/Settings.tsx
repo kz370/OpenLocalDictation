@@ -46,7 +46,7 @@ import type { AppErrorPayload, AppInfo, AudioDevice, DownloadProgress, GpuProgre
 import { Dialog, ErrorNotice, Segmented, Switch } from "../components/controls";
 import { Card, Row } from "../components/layout";
 import { SearchSelect, type SearchOption } from "../components/SearchSelect";
-import { ShortcutInput } from "../components/ShortcutInput";
+import { ShortcutInput, prettyAccelerator } from "../components/ShortcutInput";
 
 const languageOptions: SearchOption[] = [
   { value: "auto", label: "Automatic (detect)" },
@@ -431,7 +431,7 @@ export function SettingsPage() {
           <div>
             <h1>Open Local Dictation</h1>
             <p className="settings-intro" style={{ margin: 0 }}>
-              Hold {settings.shortcut.replace("CommandOrControl", "Ctrl").replaceAll("+", " + ")}, speak, and the text lands in the app you were using.
+              {settings.mode === "toggle" ? "Press" : "Hold"} {prettyAccelerator(settings.shortcut)}, speak{settings.mode === "toggle" ? ", press it again" : ""}, and the text lands in the app you were using.
             </p>
           </div>
         </div>

@@ -54,7 +54,7 @@ There is **no** command that removes the CUDA libraries.
 | `overlay_set_mini` | `mini: bool` | `()` | Saves `overlayMini`, emits `settings://changed`, re-applies the small (400x68) or full (480x176) layout. Review stays small: its editor floats above the pill. |
 | `dictation_toggle` | — | `()` | Overlay mic button: starts dictation, or stops and inserts when listening. |
 | `overlay_resize` | `width: u32, commit: bool` | `()` | Small overlay width in logical px (clamped 320-800). Applies to the window live; `commit` saves `overlayMiniWidth` and emits `settings://changed`. Ignored while `overlaySizeLocked`. |
-| `dictation_overlay_tip` | `tip: [x,y,w,h]?` | `()` | Adds a tooltip's rectangle to the overlay window's visible region (kept apart from the menu/bubble rectangle), or removes it. |
+| `dictation_overlay_bubble` | `bubble: [x,y,w,h]?` | `()` | Adds the small overlay's bubble (live text or review editor) to the window's visible region, kept apart from the language-menu rectangle, or removes it. |
 | `dictation_overlay_menu` | `menu?: [x,y,w,h]` | `()` | Adds the open language menu to the overlay window region (or removes it). |
 
 ## 2. Events (backend → UI)

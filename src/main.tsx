@@ -4,7 +4,6 @@ import { useSettings } from "./settingsStore";
 import { ErrorBoundary } from "./components/ErrorBoundary";
 import { Overlay } from "./pages/Overlay";
 import { TooltipLayer } from "./components/Tooltip";
-import { ipc } from "./ipc";
 import { SettingsPage } from "./pages/Settings";
 import "./styles/tokens.css";
 import "./styles/base.css";
@@ -55,7 +54,7 @@ function Root() {
   return (
     <ErrorBoundary where={route}>
       {route === "overlay" ? <Overlay /> : <SettingsPage />}
-      {route === "overlay" ? <TooltipLayer prefer="below" onRect={(r) => ipc.dictationOverlayTip(r).catch(() => undefined)} /> : <TooltipLayer />}
+      {route === "settings" && <TooltipLayer />}
     </ErrorBoundary>
   );
 }

@@ -327,9 +327,9 @@ const MENU_ROOM: f64 = 240.0;
 
 /// The open language menu's rectangle in the window (logical x, y, w, h).
 static MENU_RECT: Mutex<Option<[f64; 4]>> = Mutex::new(None);
-/// The tooltip's rectangle, kept apart so it never replaces the menu or the
-/// subtitle bubble.
-static TIP_RECT: Mutex<Option<[f64; 4]>> = Mutex::new(None);
+/// The small layout's bubble above the pill (live text or review editor),
+/// kept apart from the menu so neither replaces the other.
+static BUBBLE_RECT: Mutex<Option<[f64; 4]>> = Mutex::new(None);
 /// Card margin inside the window and corner radius, the menu's corner radius,
 /// and the room left around the menu for its shadow (logical px; must match
 /// .overlay-card / .overlay-lang-menu).
@@ -441,7 +441,7 @@ fn set_overlay_region(app: &AppHandle, w: &WebviewWindow, clip: bool) {
     let px = |v: f64| (v * scale).round() as i32;
     let room = room_px(w);
     let menu = *MENU_RECT.lock().unwrap_or_else(|p| p.into_inner());
-    let tip = *TIP_RECT.lock().unwrap_or_else(|p| p.into_inner());
+    let bubble = *BUBBLE_RECT.lock().unwrap_or_else(|p| p.into_inner());
     // SAFETY: plain Win32 calls on the overlay's own window handle. The menu
     // region is merged into the card's and freed; on success the system owns
     // the combined region, so it is not freed here.
@@ -471,7 +471,7 @@ fn set_overlay_region(app: &AppHandle, w: &WebviewWindow, clip: bool) {
                 CombineRgn(Some(card), Some(card), Some(tab), RGN_OR);
             }
             let _ = DeleteObject(HGDIOBJ(tab.0));
-            for [x, y, mw, mh] in [menu, tip].into_iter().flatten() {
+            for [x, y, mw, mh] in [menu, bubble].into_iter().flatten() {
                 let s = MENU_SHADOW;
                 let d = px(MENU_RADIUS + s) * 2;
                 let rgn = CreateRoundRectRgn(
@@ -516,17 +516,13 @@ pub fn set_overlay_menu(app: &AppHandle, menu: Option<[f64; 4]>) {
     }
 }
 
-/// Adds a tooltip's rectangle to the visible part of the overlay, or takes it
-/// away again (`None`).
-pub fn set_overlay_tip(app: &AppHandle, tip: Option<[f64; 4]>) {
-    *TIP_RECT.lock().unwrap_or_else(|p| p.into_inner()) = tip;
+/// Adds the small layout's bubble (live text or review editor) to the visible
+/// part of the overlay, or takes it away again (`None`).
+pub fn set_overlay_bubble(app: &AppHandle, bubble: Option<[f64; 4]>) {
+    *BUBBLE_RECT.lock().unwrap_or_else(|p| p.into_inner()) = bubble;
     if let Some(w) = app.get_webview_window(OVERLAY) {
         let app2 = app.clone();
-        on_main(app, move || {
-            if w.is_visible().unwrap_or(false) {
-                set_overlay_region(&app2, &w, true);
-            }
-        });
+        on_main(app, move || set_overlay_region(&app2, &w, true));
     }
 }
 
@@ -540,11 +536,7 @@ pub fn set_overlay_review(app: &AppHandle, review: bool) {
 
 fn overlay_review_now(app: &AppHandle, w: &WebviewWindow, review: bool) {
     suppress_persistence();
-    // The small layout has no language menu; its editor above the pill lives
-    // in this rectangle and must survive the switch.
-    if !MINI.load(Ordering::Relaxed) {
-        *MENU_RECT.lock().unwrap_or_else(|p| p.into_inner()) = None;
-    }
+    *MENU_RECT.lock().unwrap_or_else(|p| p.into_inner()) = None;
     set_overlay_activatable(app, w, review);
     // The open language menu (if any) was dropped from the visible area above.
     set_overlay_region(app, w, true);
@@ -686,7 +678,7 @@ fn show_overlay_now(app: &AppHandle, w: &WebviewWindow) {
     let saved = app.state::<AppState>().settings.get();
     suppress_persistence();
     *MENU_RECT.lock().unwrap_or_else(|p| p.into_inner()) = None;
-    *TIP_RECT.lock().unwrap_or_else(|p| p.into_inner()) = None;
+    *BUBBLE_RECT.lock().unwrap_or_else(|p| p.into_inner()) = None;
     MINI_WIDTH.store(saved.overlay_mini_width, Ordering::Relaxed);
     MINI.store(wants_mini(app), Ordering::Relaxed);
     let _ = w.set_size(overlay_window_size());

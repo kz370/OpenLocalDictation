@@ -532,11 +532,11 @@ pub fn dictation_reset_overlay_position(app: AppHandle) {
     window::reset_overlay_position(&app);
 }
 
-/// Shows a tooltip (logical x, y, width, height in the overlay window) outside
-/// the card, or hides that area again (`None`).
+/// Shows the small overlay's bubble above the pill (logical x, y, width,
+/// height in the window), or hides that area again (`None`).
 #[tauri::command]
-pub fn dictation_overlay_tip(app: AppHandle, tip: Option<[f64; 4]>) {
-    window::set_overlay_tip(&app, tip);
+pub fn dictation_overlay_bubble(app: AppHandle, bubble: Option<[f64; 4]>) {
+    window::set_overlay_bubble(&app, bubble);
 }
 
 /// Shows the overlay's open language menu (logical x, y, width, height in the

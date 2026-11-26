@@ -32,8 +32,8 @@ tray.rs            :: create, quit — tray menu (Show dictation window, Setting
 shortcuts.rs       :: register_all, handle, dispatch, start_dictation, toggle_dictation, watch_dictation_target — hotkey (hold/toggle) and target tracking.
 shortcuts.rs       :: start_watcher (Windows), esc_pressed, is_modifier_only_shortcut, is_supported_modifier_only, windows_modifier_* — modifier-only combos (2+ modifiers) and Esc cancel.
 shortcuts.rs       :: register_review_shortcuts, unregister_all — review keys (Ctrl+Enter, Ctrl+Shift+Enter, Ctrl+Shift+Backspace) and recording release.
-window.rs          :: ensure_settings, open_settings — frameless fixed 780x656 settings window, hide-on-close.
-window.rs          :: set_overlay_tip, resize_overlay_mini, create_overlay, show_overlay, hide_overlay, hide_overlay_if_session_idle, sync_overlay_pin, show_idle_overlay, refresh_overlay_layout, reset_overlay_position, cancel_dictation — overlay lifecycle and drag-position persistence.
+window.rs          :: set_overlay_bubble, ensure_settings, open_settings — frameless fixed 780x656 settings window, hide-on-close.
+window.rs          :: resize_overlay_mini, create_overlay, show_overlay, hide_overlay, hide_overlay_if_session_idle, sync_overlay_pin, show_idle_overlay, refresh_overlay_layout, reset_overlay_position, cancel_dictation — overlay lifecycle and drag-position persistence.
 window.rs          :: set_overlay_review, discard_review, set_overlay_menu, set_overlay_region, strip_frame_styles, set_overlay_activatable — review focus, window region clip, menu room.
 window.rs          :: remember_target, refresh_dictation_target, restore_target, dictation_target_name, application_display_name, focus_hwnd — target-app capture and focus return.
 typing.rs          :: LiveTyper{set_target,finish,retract,snapshot,reset}, committed_prefix — live word-committed typing with desync recovery.
@@ -57,13 +57,13 @@ settingsStore.ts               :: useSettings (zustand), applyTheme (system/ligh
 knownLanguages.ts              :: KNOWN_LANGUAGES — ~80 Whisper language codes (incl. Arabic, German) with English and native names.
 pages/Overlay.tsx              :: Overlay — states, live text, spectrum, target-app tab, language pill, review editor, drag; PillMenu, HeadBtn, useOverlayDrag.
 pages/Settings.tsx             :: SettingsPage — frameless title bar + four tabs; ModelCard (folder, models, downloads), ProcessingCard (CPU/GPU, CUDA), Dictation card, App card.
-components/SearchSelect.tsx    :: SearchSelect — compact dropdown, filter box when the list is longer than six.
+components/SearchSelect.tsx    :: SearchSelect — compact dropdown, filter box when the list is longer than four.
 components/ShortcutInput.tsx   :: ShortcutInput, acceleratorFromEvent, prettyAccelerator — records a hotkey; Reset asks first.
 components/controls.tsx        :: Switch, Segmented, Dialog (themed modal), ErrorNotice, textDir.
 components/layout.tsx          :: Card, Row.
 components/VoiceBars.tsx       :: VoiceBars — mirrored 24-band spectrum.
 components/ErrorBoundary.tsx   :: ErrorBoundary — shows a crash instead of a blank window.
-components/Tooltip.tsx         :: TooltipLayer — themed tooltips replacing native title tooltips; overlay reports their rectangle to the window region.
+components/Tooltip.tsx         :: TooltipLayer — themed tooltips replacing native title tooltips; in the overlay the text is shown inside its header instead of a bubble.
 styles/tokens.css              :: design tokens, light/dark/high-contrast, teal accent.
 styles/base.css                :: buttons, inputs, switch, segmented, badges, dialog, notices.
 styles/app.css                 :: settings shell, title bar, tabs, rows, cards, model list, overlay, dropdowns.

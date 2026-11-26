@@ -9,8 +9,8 @@ export interface SearchOption {
 }
 
 /** Compact dropdown with a filter box: a short list instead of a screen-tall native select. */
-export function SearchSelect(props: { value: string; options: SearchOption[]; onChange: (v: string) => void; label: string; placeholder?: string; /** Show the filter box; by default only for lists longer than six. */ searchable?: boolean }) {
-  const searchable = props.searchable ?? props.options.length > 6;
+export function SearchSelect(props: { value: string; options: SearchOption[]; onChange: (v: string) => void; label: string; placeholder?: string; /** Show the filter box; by default only for lists longer than four. */ searchable?: boolean }) {
+  const searchable = props.searchable ?? props.options.length > 4;
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
   const [active, setActive] = useState(0);

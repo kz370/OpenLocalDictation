@@ -108,8 +108,12 @@ Pressing the dictation shortcut while the last take is still transcribing (`Voic
 
 ### Resizable small overlay and tooltips
 
-The small pill has a drag handle on its right edge (width only, 320-800 px, double-click resets to 400). `overlay_resize` resizes the window live and saves the width on release; `overlaySizeLocked` (Settings, Overlay tab) removes the handle. Tooltips are themed: `src/components/Tooltip.tsx` (`TooltipLayer`, mounted once per window in `main.tsx`) replaces the native `title` tooltip by moving the text to `data-tip` while hovered and drawing a `.tooltip` using the theme tokens. In the overlay window the tooltip's rectangle is added to the window region through `dictation_overlay_tip`, so it can sit outside the card.
+The small pill has a drag handle on its right edge (width only, 320-800 px, double-click resets to 400). `overlay_resize` resizes the window live and saves the width on release; `overlaySizeLocked` (Settings, Overlay tab) removes the handle. Tooltips are themed: `src/components/Tooltip.tsx` (`TooltipLayer`, mounted once per window in `main.tsx`) replaces the native `title` tooltip by moving the text to `data-tip` while hovered and drawing a `.tooltip` using the theme tokens. In the overlay window no bubble is drawn (the card sits on the taskbar and the window is clipped to it): `TooltipLayer inline` hands the text to the overlay, which shows it in its header in place of the status label while the pointer is on a button.
 
 ### Settings icons and duplicate-text fix
 
 Tabs, card headings, setting rows (`Row icon`), segmented options and Cancel/Save/Edit/Dismiss buttons carry lucide icons (`Card icon`, `Segmented option icon`). In `stt/session.rs` the audio of a finished utterance is now cut from the tail buffer by its stream position (`SpeechSegment::start` + length, tracked against `buffer_base`), not by a length guess: with a long pause before speaking, part of the utterance used to stay in the buffer and was transcribed a second time when recording stopped, so the text appeared twice.
+
+### Language menu in the small pill
+
+The small pill has a language chip (globe + code) and the same menu opens on a right click anywhere on the pill header (`PillMenu` `openRef`). The menu's rectangle (`dictation_overlay_menu`) and the bubble's (`dictation_overlay_bubble`) are separate window-region rectangles; the bubble is hidden while the menu is open. Picking a language while listening restarts the take in that language, like in the full card.

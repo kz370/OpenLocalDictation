@@ -46,7 +46,7 @@ export const ipc = {
   overlaySetPinned: (pinned: boolean) => invoke<void>("overlay_set_pinned", { pinned }),
   overlayResize: (width: number, commit: boolean) => invoke<void>("overlay_resize", { width, commit }),
   overlaySetMini: (mini: boolean) => invoke<void>("overlay_set_mini", { mini }),
-  dictationOverlayTip: (tip: [number, number, number, number] | null) => invoke<void>("dictation_overlay_tip", { tip }),
+  dictationOverlayBubble: (bubble: [number, number, number, number] | null) => invoke<void>("dictation_overlay_bubble", { bubble }),
   dictationOverlayMenu: (menu: [number, number, number, number] | null) => invoke<void>("dictation_overlay_menu", { menu }),
 };
 

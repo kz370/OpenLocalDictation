@@ -8,6 +8,8 @@ import { errorMessage, t } from "../strings";
 import type { DictationStateEvent, DictationTargetEvent, VoiceEvent } from "../types";
 import { textDir } from "../components/controls";
 import { VoiceBars } from "../components/VoiceBars";
+import { TooltipLayer } from "../components/Tooltip";
+import { prettyAccelerator } from "../components/ShortcutInput";
 
 /** Free drag on the overlay's header strip; Shift locks to horizontal-only,
  * Alt locks to vertical-only. Uses manual `setPosition` (not Tauri's
@@ -170,6 +172,9 @@ function PillMenu(props: {
   /** Adds a filter box on top of the options, for lists too long to scan. */
   searchable?: boolean;
   searchPlaceholder?: string;
+  /** Lets the page open the menu (the pill's right click). */
+  openRef?: React.MutableRefObject<(() => void) | null>;
+  onOpenChange?: (open: boolean) => void;
 }) {
   const [open, setOpen] = useState<{ top: number; right: number } | null>(null);
   const [query, setQuery] = useState("");
@@ -178,6 +183,8 @@ function PillMenu(props: {
   const menuRef = useRef<HTMLDivElement>(null);
   const openRef = useRef(false);
   const owner = useRef({});
+  const onOpenChangeRef = useRef(props.onOpenChange);
+  onOpenChangeRef.current = props.onOpenChange;
 
   const current = props.options.find((o) => o.value === props.value) ?? props.options[0];
   const needle = query.trim().toLowerCase();
@@ -212,6 +219,10 @@ function PillMenu(props: {
   };
 
   useEffect(() => {
+    onOpenChangeRef.current?.(open !== null);
+  }, [open]);
+
+  useEffect(() => {
     if (!open) return;
     menuRef.current?.querySelector('[aria-selected="true"]')?.scrollIntoView({ block: "nearest" });
     const onDown = (e: PointerEvent) => {
@@ -239,6 +250,8 @@ function PillMenu(props: {
   // A new dictation state (review, done) or unmounting covers the room again.
   // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => close, [props.resetKey]);
+
+  if (props.openRef) props.openRef.current = () => void show();
 
   const up = open !== null && open.top < (btnRef.current?.getBoundingClientRect().top ?? 0);
   return (
@@ -315,6 +328,10 @@ export function Overlay() {
   const [reviewPreview, setReviewPreview] = useState(false);
   const [bands, setBands] = useState<number[]>([]);
   const [level, setLevel] = useState(0);
+  const [langOpen, setLangOpen] = useState(false);
+  const openLang = useRef<(() => void) | null>(null);
+  // Tooltips of the overlay show inside its header (see TooltipLayer `inline`): the card sits on the taskbar, so a bubble has no room.
+  const [hint, setHint] = useState<string | null>(null);
   const mode = useSettings((s) => s.settings?.mode ?? "hold");
   const reviewBeforeInsert = useSettings((s) => s.settings?.reviewBeforeInsert ?? true);
   const pinned = useSettings((s) => s.settings?.overlayPinned ?? false);
@@ -466,7 +483,7 @@ export function Overlay() {
   // visible region (the same mechanism the language menu uses).
   const subRef = useRef<HTMLDivElement>(null);
   // In review it is the editor instead, so the pill never grows.
-  const showSub = miniView && (reviewEditorOpen || (!!text && ["listening", "transcribing", "correcting", "inserted"].includes(state)));
+  const showSub = miniView && !langOpen && (reviewEditorOpen || (!!text && ["listening", "transcribing", "correcting", "inserted"].includes(state)));
   useEffect(() => {
     const el = subRef.current;
     if (!showSub || !el) return;
@@ -479,7 +496,7 @@ export function Overlay() {
     }
     const report = () => {
       const r = el.getBoundingClientRect();
-      void ipc.dictationOverlayMenu([r.left, r.top, r.width, r.height]).catch(quiet);
+      void ipc.dictationOverlayBubble([r.left, r.top, r.width, r.height]).catch(quiet);
     };
     report();
     // The pill's width can be dragged: follow it.
@@ -490,7 +507,7 @@ export function Overlay() {
   }, [showSub, reviewEditorOpen, text, draft, state, reviewReady, error]);
   useEffect(() => {
     if (!showSub) return;
-    return () => void ipc.dictationOverlayMenu(null).catch(quiet);
+    return () => void ipc.dictationOverlayBubble(null).catch(quiet);
   }, [showSub]);
   // Small pill: the free room shows the app the text goes into.
   const miniApp = miniView && targetApp && ["listening", "transcribing", "correcting", "reviewing", "review"].includes(state) ? targetApp : null;
@@ -644,6 +661,7 @@ export function Overlay() {
           </span>
         </div>
       )}
+      <TooltipLayer inline={setHint} />
       {miniView && !sizeLocked && <ResizeEdge />}
       {showSub &&
         (reviewEditorOpen ? (
@@ -659,22 +677,26 @@ export function Overlay() {
           double-click puts the overlay back in its default spot. */}
       <div
         className={`overlay-head${positionLocked ? " locked" : ""}`}
-        title={positionLocked ? undefined : t(horizontalOnly ? "overlay.dragHintSideways" : "overlay.dragHint")}
         onPointerDown={drag.onPointerDown}
         onPointerMove={drag.onPointerMove}
         onPointerUp={drag.onPointerUp}
+        onContextMenu={(e) => {
+          // Right click on the pill: the language menu.
+          e.preventDefault();
+          openLang.current?.();
+        }}
         onDoubleClick={() => (positionLocked ? undefined : void ipc.dictationResetOverlayPosition().catch(quiet))}
       >
         <span className="overlay-icon">{icon}</span>
         {miniView && listening && <VoiceBars bands={bands} level={level} label={t("voice.level")} />}
-        <span className={`overlay-label${miniApp ? " app" : ""}`} title={miniApp ? t("overlay.targetWindow", { app: miniApp }) : undefined}>
-          {miniApp ?? label}
+        <span className={`overlay-label${hint ? " hint" : miniApp ? " app" : ""}`}>
+          {hint ?? miniApp ?? label}
         </span>
         {!miniView && listening && <VoiceBars bands={bands} level={level} label={t("voice.level")} />}
         {!miniView && <span style={{ flex: 1 }} />}
-        {!miniView && (listening || state === "review") && (
+        {(miniView ? idle || listening || state === "review" : listening || state === "review") && (
           <div className="overlay-pills">
-            <PillMenu label={t("overlay.language")} icon={<Globe size={12} aria-hidden />} value={language} options={languageOptions} onChange={changeLanguage} resetKey={state} searchable searchPlaceholder={t("overlay.searchLanguages")} />
+            <PillMenu label={t("overlay.language")} icon={<Globe size={12} aria-hidden />} value={language} options={languageOptions} onChange={changeLanguage} resetKey={state} searchable={languageOptions.length > 4} searchPlaceholder={t("overlay.searchLanguages")} openRef={openLang} onOpenChange={setLangOpen} />
           </div>
         )}
         {showSettingsBtn && !reviewEditorOpen && (
@@ -704,7 +726,7 @@ export function Overlay() {
         editorBody      ) : miniView ? null : (
         <>
           <div className={`overlay-text${text ? "" : " empty"}`} ref={textRef} dir={text ? textDir(text) : "auto"}>
-            {text || (idle ? t("overlay.idleHint", { keys: shortcut.replace("CommandOrControl", "Ctrl") }) : t("overlay.speakNow"))}
+            {text || (idle ? t("overlay.idleHint", { keys: prettyAccelerator(shortcut) }) : t("overlay.speakNow"))}
           </div>
           {listening && (
             <div className="overlay-actions">
