@@ -481,8 +481,34 @@ export function SettingsPage() {
           <Row label="Pin the overlay" hint="Keeps the overlay on screen, always on top of other apps. It listens to nothing until you press the shortcut or its mic button." htmlFor="sw-pin">
             <Switch id="sw-pin" label="Pin the overlay" checked={settings.overlayPinned} onChange={(v) => void ipc.overlaySetPinned(v)} />
           </Row>
-          <Row label="Small overlay" hint="A compact pill with the mic and level meter. What you say shows above it, and review edits there too." htmlFor="sw-mini">
-            <Switch id="sw-mini" label="Small overlay" checked={settings.overlayMini} onChange={(v) => void ipc.overlaySetMini(v)} />
+          <Row label="Overlay size" hint="Small is a compact pill: what you say shows above it and review edits there too. With both, a button in the overlay switches between them.">
+            <Segmented
+              label="Overlay size"
+              value={settings.overlayLayouts}
+              options={[
+                { value: "small", label: "Small only" },
+                { value: "large", label: "Large only" },
+                { value: "both", label: "Both" },
+              ]}
+              onChange={(v) => set((d) => void (d.overlayLayouts = v))}
+            />
+          </Row>
+          <Row label="Settings button" hint="Shows a gear in the overlay that opens these settings." htmlFor="sw-gear">
+            <Switch id="sw-gear" label="Settings button" checked={settings.overlayShowSettings} onChange={(v) => set((d) => void (d.overlayShowSettings = v))} />
+          </Row>
+          <Row label="Overlay opacity" hint="Makes the overlay background see-through. Text and buttons stay solid.">
+            <div style={{ display: "flex", alignItems: "center", gap: 10, width: 220 }}>
+              <input
+                type="range"
+                min={30}
+                max={100}
+                step={5}
+                aria-label="Overlay opacity"
+                value={settings.overlayOpacity}
+                onChange={(e) => set((d) => void (d.overlayOpacity = Number(e.target.value)))}
+              />
+              <span style={{ width: 40, textAlign: "right", fontVariantNumeric: "tabular-nums" }}>{settings.overlayOpacity}%</span>
+            </div>
           </Row>
           <Row label="Lock the small overlay's size" hint="Off: drag the right edge of the small overlay to change its width (double-click the edge to reset it)." htmlFor="sw-lock">
             <Switch id="sw-lock" label="Lock the small overlay's size" checked={settings.overlaySizeLocked} onChange={(v) => set((d) => void (d.overlaySizeLocked = v))} />

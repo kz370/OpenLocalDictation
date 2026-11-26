@@ -10,7 +10,7 @@ There are **25 commands**.
 | Command | Args | Returns | Notes |
 |---|---|---|---|
 | `get_settings` | — | `Settings` | |
-| `save_settings` | `settings: Settings` | `Settings` | Sanitizes and saves. Keeps `overlayX/Y`, `overlayPinned`, `overlayMini`, `overlayMiniWidth` and `modelsDir` (owned by dragging, the overlay commands and `models_set_dir`). Unloads the recognizer when `model` or `device` changed, re-registers the hotkey when `shortcut` changed, updates the autostart entry when `startWithOs` changed. Emits `settings://changed` and `gpu://changed`. |
+| `save_settings` | `settings: Settings` | `Settings` | Sanitizes and saves. Re-applies the overlay layout when `overlayLayouts` changed. Keeps `overlayX/Y`, `overlayPinned`, `overlayMini`, `overlayMiniWidth` and `modelsDir` (owned by dragging, the overlay commands and `models_set_dir`). Unloads the recognizer when `model` or `device` changed, re-registers the hotkey when `shortcut` changed, updates the autostart entry when `startWithOs` changed. Emits `settings://changed` and `gpu://changed`. |
 | `shortcut_errors` | — | `string[]` | Registration failures from the last `register_all`. |
 | `shortcuts_capture` | `capturing: bool`, `reviewShortcuts?: bool` | `()` | `true` releases all global shortcuts (settings is recording a new one) or, with `reviewShortcuts`, swaps in the review keys; `false` re-registers the normal ones. |
 | `app_info` | — | `AppInfo` | version, paths, NVIDIA info, current and default models folder. |
@@ -49,6 +49,7 @@ There is **no** command that removes the CUDA libraries.
 | `dictation_retry` | — | `()` | Throws the take away (retracting live-typed text) and listens again. |
 | `dictation_set_language` | `language: string` | `()` | Saves `language`; emits `settings://changed`. |
 | `dictation_reset_overlay_position` | — | `()` | Clears `overlayX/Y` and moves the overlay to its default spot. |
+| `settings_open` | — | `()` | Opens the settings window (the overlay's gear button). |
 | `overlay_set_pinned` | `pinned: bool` | `()` | Also the idle overlay's X button (unpin = close the window, never quits the app). Saves `overlayPinned`, emits `settings://changed`. Pinned: the overlay shows now and stays on screen (always on top), falling back to an idle card after each dictation (event `overlay://idle`). Unpinned and idle: hides. |
 | `overlay_set_mini` | `mini: bool` | `()` | Saves `overlayMini`, emits `settings://changed`, re-applies the small (400x68) or full (480x176) layout. Review stays small: its editor floats above the pill. |
 | `dictation_toggle` | — | `()` | Overlay mic button: starts dictation, or stops and inserts when listening. |

@@ -19,6 +19,7 @@ const EN: Record<string, string> = {
   "overlay.hintToggle": "Press the shortcut again to insert · Esc cancels",
   "overlay.hintToggleReview": "Press the shortcut again to review · Esc cancels",
   "overlay.idle": "Ready",
+  "overlay.settings": "Open settings",
   "overlay.close": "Close the dictation window",
   "overlay.idleHint": "Press {{keys}} or click the mic · nothing is heard until then",
   "overlay.micStart": "Start dictation",

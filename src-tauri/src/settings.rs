@@ -50,6 +50,13 @@ pub struct Settings {
     pub overlay_pinned: bool,
     /// Use the small overlay (mic and level only; review still opens full size).
     pub overlay_mini: bool,
+    /// Which overlay sizes may be used: "small" | "large" | "both". With "both",
+    /// `overlay_mini` is the one currently shown (toggled from the overlay).
+    pub overlay_layouts: String,
+    /// Overlay background opacity in percent (30-100).
+    pub overlay_opacity: u32,
+    /// Show the settings button in the overlay header.
+    pub overlay_show_settings: bool,
     /// Width of the small overlay in logical px (dragged on its right edge).
     pub overlay_mini_width: u32,
     /// Locks the small overlay's width: no resize handle.
@@ -79,6 +86,9 @@ impl Default for Settings {
             overlay_y: None,
             overlay_pinned: false,
             overlay_mini: false,
+            overlay_layouts: "small".into(),
+            overlay_opacity: 100,
+            overlay_show_settings: true,
             overlay_mini_width: 400,
             overlay_size_locked: false,
         }
@@ -94,6 +104,15 @@ fn pick<'a>(v: &'a str, allowed: &[&'a str], fallback: &'a str) -> String {
 }
 
 impl Settings {
+    /// Whether the overlay uses its small layout right now.
+    pub fn effective_mini(&self) -> bool {
+        match self.overlay_layouts.as_str() {
+            "small" => true,
+            "large" => false,
+            _ => self.overlay_mini,
+        }
+    }
+
     /// Clamps values into sane ranges; applied on every load and save.
     pub fn sanitize(&mut self) {
         self.device = pick(&self.device, &["gpu", "cpu"], "gpu");
@@ -109,6 +128,8 @@ impl Settings {
         if self.shortcut.trim().is_empty() {
             self.shortcut = Settings::default().shortcut;
         }
+        self.overlay_layouts = pick(&self.overlay_layouts, &["small", "large", "both"], "small");
+        self.overlay_opacity = self.overlay_opacity.clamp(30, 100);
         self.overlay_mini_width = self
             .overlay_mini_width
             .clamp(MINI_MIN_WIDTH, MINI_MAX_WIDTH);

@@ -42,6 +42,7 @@ export const ipc = {
   dictationSetLanguage: (language: string) => invoke<void>("dictation_set_language", { language }),
   dictationResetOverlayPosition: () => invoke<void>("dictation_reset_overlay_position"),
   dictationToggle: () => invoke<void>("dictation_toggle"),
+  settingsOpen: () => invoke<void>("settings_open"),
   overlaySetPinned: (pinned: boolean) => invoke<void>("overlay_set_pinned", { pinned }),
   overlayResize: (width: number, commit: boolean) => invoke<void>("overlay_resize", { width, commit }),
   overlaySetMini: (mini: boolean) => invoke<void>("overlay_set_mini", { mini }),

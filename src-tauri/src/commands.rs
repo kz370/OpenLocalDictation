@@ -53,6 +53,9 @@ pub fn save_settings(
             tracing::warn!(error = %e, "could not change the autostart entry");
         }
     }
+    if saved.overlay_layouts != before.overlay_layouts {
+        window::refresh_overlay_layout(&app);
+    }
     let _ = app.emit("settings://changed", &saved);
     let _ = app.emit("gpu://changed", ());
     Ok(saved)
@@ -459,6 +462,12 @@ pub fn dictation_set_language(
     let saved = state.settings.update(|s| s.language = language)?;
     let _ = app.emit("settings://changed", &saved);
     Ok(())
+}
+
+/// Opens the settings window (the overlay's gear button).
+#[tauri::command]
+pub fn settings_open(app: AppHandle) {
+    let _ = window::open_settings(&app);
 }
 
 /// Pins the overlay (stays on screen, always on top, idle until the shortcut or

@@ -27,6 +27,12 @@ export interface Settings {
   overlayPinned: boolean;
   /** Small overlay layout. */
   overlayMini: boolean;
+  /** Which overlay sizes are available; with "both" `overlayMini` is the current one. */
+  /** Overlay background opacity, percent (30-100). */
+  overlayOpacity: number;
+  /** Settings (gear) button in the overlay header. */
+  overlayShowSettings: boolean;
+  overlayLayouts: "small" | "large" | "both";
   /** Small overlay width in logical px (320-800). */
   overlayMiniWidth: number;
   /** No resize handle on the small overlay. */

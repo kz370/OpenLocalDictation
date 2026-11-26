@@ -40,3 +40,6 @@ Files Processed: 65 — COMPLETE
 - [2026-11-26T23:40:00Z] Small overlay: width-only resize handle (overlay_resize, overlayMiniWidth 320-800, overlaySizeLocked option in Settings). Themed tooltips (components/Tooltip.tsx) replace native title tooltips; overlay adds them to its region via dictation_overlay_tip.
 - [2026-11-27T00:00:00Z] Settings: overlay options (pin, small, lock size, position) moved from the Dictation tab to a new Overlay tab; the Dictation tab no longer overflows.
 - [2026-11-27T00:20:00Z] Settings window height 690 -> 640 (the Overlay tab split made the Dictation tab shorter).
+- [2026-11-27T00:40:00Z] New setting overlayLayouts (small | large | both, default small) replaces the Small overlay switch; the size button shows only with both.
+- [2026-11-27T01:00:00Z] New setting overlayOpacity (30-100, default 100) with a slider in Settings > Overlay; applies to the overlay card and bubble background.
+- [2026-11-27T01:20:00Z] Overlay header gear button (settings_open) in both layouts; overlayShowSettings option hides it.

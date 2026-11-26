@@ -395,6 +395,7 @@ pub fn run() {
             commands::dictation_reset_overlay_position,
             commands::dictation_overlay_menu,
             commands::dictation_overlay_tip,
+            commands::settings_open,
             commands::overlay_set_pinned,
             commands::overlay_set_mini,
             commands::overlay_resize,

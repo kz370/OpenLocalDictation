@@ -131,7 +131,7 @@ fn card_dims() -> (f64, f64) {
 /// Small layout wanted right now. Review stays small too: its editor floats
 /// above the pill.
 fn wants_mini(app: &AppHandle) -> bool {
-    app.state::<AppState>().settings.get().overlay_mini
+    app.state::<AppState>().settings.get().effective_mini()
 }
 
 #[cfg(windows)]

@@ -252,7 +252,8 @@ html.overlay {
   gap: 6px;
   padding: 10px 12px 10px 14px;
   border-radius: 18px;
-  background: var(--popover);
+  /* --ov-a is the user's overlay opacity (Settings > Overlay). */
+  background: color-mix(in srgb, var(--popover) var(--ov-a, 100%), transparent);
   border: 1px solid var(--hairline);
   /* Small enough to fade out inside the 8px margin: the window is clipped just
      outside it (CARD_MARGIN in window.rs), so a bigger shadow gets cut off. */
@@ -397,7 +398,7 @@ html.overlay {
   scrollbar-width: none;
   box-sizing: border-box;
   border-radius: 14px;
-  background: var(--popover);
+  background: color-mix(in srgb, var(--popover) var(--ov-a, 100%), transparent);
   border: 1px solid var(--hairline);
   box-shadow: 0 1px 6px rgba(0, 0, 0, 0.3);
   font-size: var(--text-sm);

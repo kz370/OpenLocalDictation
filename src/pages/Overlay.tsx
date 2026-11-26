@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Check, CheckCircle2, ChevronDown, Copy, Globe, Maximize2, Mic, Minimize2, Pencil, Pin, PinOff, RotateCcw, Square, X, XCircle } from "lucide-react";
+import { Check, CheckCircle2, ChevronDown, Copy, Globe, Maximize2, Mic, Minimize2, Pencil, Pin, PinOff, RotateCcw, Settings as SettingsIcon, Square, X, XCircle } from "lucide-react";
 import { getCurrentWindow, PhysicalPosition } from "@tauri-apps/api/window";
 import { ipc, on } from "../ipc";
 import { KNOWN_LANGUAGES } from "../knownLanguages";
@@ -318,7 +318,11 @@ export function Overlay() {
   const mode = useSettings((s) => s.settings?.mode ?? "hold");
   const reviewBeforeInsert = useSettings((s) => s.settings?.reviewBeforeInsert ?? true);
   const pinned = useSettings((s) => s.settings?.overlayPinned ?? false);
-  const mini = useSettings((s) => s.settings?.overlayMini ?? false);
+  const showSettingsBtn = useSettings((s) => s.settings?.overlayShowSettings ?? true);
+  const opacity = useSettings((s) => s.settings?.overlayOpacity ?? 100);
+  const layouts = useSettings((s) => s.settings?.overlayLayouts ?? "small");
+  const miniChoice = useSettings((s) => s.settings?.overlayMini ?? false);
+  const mini = layouts === "small" ? true : layouts === "large" ? false : miniChoice;
   const sizeLocked = useSettings((s) => s.settings?.overlaySizeLocked ?? false);
   const shortcut = useSettings((s) => s.settings?.shortcut ?? "");
   const textRef = useRef<HTMLDivElement>(null);
@@ -415,6 +419,10 @@ export function Overlay() {
     ];
     return () => subs.forEach((s) => void s.then((u) => u()));
   }, []);
+
+  useEffect(() => {
+    document.documentElement.style.setProperty("--ov-a", `${opacity}%`);
+  }, [opacity]);
 
   useEffect(() => {
     textRef.current?.scrollTo({ top: textRef.current.scrollHeight });
@@ -667,7 +675,12 @@ export function Overlay() {
             <PillMenu label={t("overlay.language")} icon={<Globe size={12} aria-hidden />} value={language} options={languageOptions} onChange={changeLanguage} resetKey={state} searchable searchPlaceholder={t("overlay.searchLanguages")} />
           </div>
         )}
-        {!reviewEditorOpen && (
+        {showSettingsBtn && !reviewEditorOpen && (
+          <HeadBtn label={t("overlay.settings")} onClick={() => void ipc.settingsOpen().catch(quiet)}>
+            <SettingsIcon size={13} />
+          </HeadBtn>
+        )}
+        {layouts === "both" && !reviewEditorOpen && (
           <HeadBtn label={t(mini ? "overlay.makeFull" : "overlay.makeMini")} onClick={() => void ipc.overlaySetMini(!mini).catch(quiet)}>
             {mini ? <Maximize2 size={13} /> : <Minimize2 size={13} />}
           </HeadBtn>
