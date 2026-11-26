@@ -12,7 +12,7 @@ src-tauri/           Rust backend (crate local-dictation, lib local_dictation_li
 specs/               source of truth (this folder)
 scripts/build.bat     release build + portable folder and zip + installer + release notes
 scripts/bump-version.bat (+ .ps1)  bumps the version everywhere and writes the release notes
-website/             project website (GitHub Pages), deployed by .github/workflows/pages.yml when a tag containing "website" or "page" is pushed (e.g. website-2026-11-27) (or run by hand); `website/more-projects/` is the shared "Check my other projects" widget (same folder as on the Open Local Assistant site; add a project by editing its PROJECTS list)
+website/             project website (GitHub Pages), deployed by .github/workflows/pages.yml when a tag containing "website" or "page" is pushed (e.g. website-2026-11-27) (or run by hand); `website/more-projects/` is the shared "Check my other projects" widget (same folder as on the Open Local Assistant site; add a project by editing its PROJECTS list); the same file renders the "My projects" drop-down in the header nav (`data-projects-menu`)
 local-dictation.iss  Inno Setup script
 AGENTS.md            contributor rules
 ```

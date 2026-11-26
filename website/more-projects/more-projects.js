@@ -9,6 +9,12 @@
  * data-current  repo name of the site it is on; that project is left out of the list.
  * data-title    optional heading override.
  *
+ * Navigation drop-down (same list, icon on the left, name on the right): put
+ *   <div data-projects-menu data-current="OpenLocalDictation"></div>
+ * (or an <li> with the same attributes) inside the site's nav. data-label sets
+ * the button text (default "My projects"). The menu opens on click and closes
+ * on Escape, on a click elsewhere, or when focus leaves it.
+ *
  * Styles are injected by this file and read the host site's CSS variables
  * (--bg, --surface, --fg, --fg-muted, --primary, --line, --radius-lg, --sans)
  * with dark fallbacks, so it works on a site that defines none of them.
@@ -71,6 +77,19 @@
     ".omp__link:hover{border-color:var(--primary,#5fd4b0);color:var(--primary,#5fd4b0)}",
     ".omp__link:focus-visible{outline:2px solid var(--primary,#5fd4b0);outline-offset:2px}",
     "@media (prefers-reduced-motion:reduce){.omp__card{transition:none}.omp__card:hover{transform:none}}",
+    ".omp-menu{position:relative;display:inline-block;font-family:var(--sans,system-ui,sans-serif);list-style:none}",
+    ".omp-menu__btn{display:inline-flex;align-items:center;gap:6px;margin:0;padding:7px 11px;border:0;border-radius:7px;background:none;color:var(--fg-muted,#a3adad);font:inherit;font-size:15px;font-weight:500;line-height:inherit;cursor:pointer}",
+    ".omp-menu__btn:hover,.omp-menu__btn[aria-expanded=true]{color:var(--fg,#f1f3f3)}",
+    ".omp-menu__btn:focus-visible,.omp-menu .omp-menu__item:focus-visible{outline:2px solid var(--primary,#5fd4b0);outline-offset:2px}",
+    ".omp-menu__chev{width:14px;height:14px;transition:transform .18s}",
+    ".omp-menu__btn[aria-expanded=true] .omp-menu__chev{transform:rotate(180deg)}",
+    ".omp-menu__panel{position:absolute;right:0;top:calc(100% + 8px);z-index:60;min-width:250px;padding:6px;border:1px solid var(--line,rgba(255,255,255,.12));border-radius:var(--radius-lg,14px);background:var(--surface,#1e2323);box-shadow:0 18px 44px rgba(0,0,0,.5)}",
+    ".omp-menu__panel[hidden]{display:none}",
+    ".omp-menu .omp-menu__item{display:flex;align-items:center;gap:12px;padding:9px 10px;border-radius:10px;color:var(--fg,#f1f3f3);font-size:15px;font-weight:600;line-height:1.3;text-decoration:none;white-space:nowrap}",
+    ".omp-menu .omp-menu__item:hover{background:rgba(255,255,255,.06);color:var(--primary,#5fd4b0)}",
+    ".omp-menu__icon{width:28px;height:28px;border-radius:7px;flex:none;object-fit:contain}",
+    "@media (max-width:860px){.omp-menu{display:block}.omp-menu__panel{position:static;margin-top:4px;box-shadow:none;min-width:0}}",
+    "@media (prefers-reduced-motion:reduce){.omp-menu__chev{transition:none}}",
   ].join("\n");
 
   function el(tag, cls, text) {
@@ -144,13 +163,86 @@
     mount.appendChild(wrap);
   }
 
+  function renderMenu(mount) {
+    var current = (mount.dataset.current || "").toLowerCase();
+    var list = PROJECTS.filter(function (p) {
+      return p.repo.toLowerCase() !== current;
+    });
+    if (!list.length) return;
+
+    var id = "omp-menu-" + (renderMenu.n = (renderMenu.n || 0) + 1);
+    mount.classList.add("omp-menu");
+
+    var btn = el("button", "omp-menu__btn", mount.dataset.label || "My projects");
+    btn.type = "button";
+    btn.setAttribute("aria-expanded", "false");
+    btn.setAttribute("aria-controls", id);
+    var NS = "http://www.w3.org/2000/svg";
+    var chev = document.createElementNS(NS, "svg");
+    chev.setAttribute("class", "omp-menu__chev");
+    chev.setAttribute("viewBox", "0 0 24 24");
+    chev.setAttribute("fill", "none");
+    chev.setAttribute("stroke", "currentColor");
+    chev.setAttribute("stroke-width", "2");
+    chev.setAttribute("stroke-linecap", "round");
+    chev.setAttribute("stroke-linejoin", "round");
+    chev.setAttribute("aria-hidden", "true");
+    var path = document.createElementNS(NS, "path");
+    path.setAttribute("d", "m6 9 6 6 6-6");
+    chev.appendChild(path);
+    btn.appendChild(chev);
+
+    var panel = el("div", "omp-menu__panel");
+    panel.id = id;
+    panel.hidden = true;
+    list.forEach(function (p) {
+      var a = el("a", "omp-menu__item");
+      a.href = p.site || p.github;
+      a.target = "_blank";
+      a.rel = "noopener noreferrer";
+      var img = el("img", "omp-menu__icon");
+      img.src = base + p.icon;
+      img.alt = "";
+      img.width = 28;
+      img.height = 28;
+      a.appendChild(img);
+      a.appendChild(el("span", "", p.name));
+      panel.appendChild(a);
+    });
+
+    function set(open) {
+      panel.hidden = !open;
+      btn.setAttribute("aria-expanded", open ? "true" : "false");
+    }
+    btn.addEventListener("click", function () {
+      set(panel.hidden);
+    });
+    document.addEventListener("click", function (e) {
+      if (!mount.contains(e.target)) set(false);
+    });
+    mount.addEventListener("keydown", function (e) {
+      if (e.key === "Escape" && !panel.hidden) {
+        set(false);
+        btn.focus();
+      }
+    });
+    mount.addEventListener("focusout", function (e) {
+      if (e.relatedTarget && !mount.contains(e.relatedTarget)) set(false);
+    });
+
+    mount.appendChild(btn);
+    mount.appendChild(panel);
+  }
+
   function init() {
     var mounts = document.querySelectorAll("[data-more-projects]");
-    if (!mounts.length) return;
+    var menus = document.querySelectorAll("[data-projects-menu]");
+    if (!mounts.length && !menus.length) return;
     var style = document.createElement("style");
     style.textContent = CSS;
     document.head.appendChild(style);
     Array.prototype.forEach.call(mounts, render);
+    Array.prototype.forEach.call(menus, renderMenu);
   }
 
   if (document.readyState === "loading") {

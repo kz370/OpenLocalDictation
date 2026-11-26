@@ -57,6 +57,7 @@ section.alt { background: var(--bg-2); border-block: 1px solid var(--line); }
 .top nav { display: flex; gap: 22px; margin-left: auto; font-size: 15px; }
 .top nav a { color: var(--muted); }
 .top nav a:hover { color: var(--text); text-decoration: none; }
+.top nav { align-items: center; }
 
 /* Buttons */
 .btn {
