@@ -206,6 +206,8 @@ function pillMinWidth(head: HTMLElement): number {
  *  default width. Never narrower than the header content (`minWidth`). */
 function ResizeEdge(props: { minWidth: () => number }) {
   const drag = useRef<{ x: number; w: number; frame: number | null; next: number } | null>(null);
+  // The pill grows around its center (the window recenters on every resize), so
+  // the edge follows the pointer at twice the pointer's travel.
   const floor = () => Math.max(MINI_MIN_W, props.minWidth());
   const send = (w: number, commit: boolean) => void ipc.overlayResize(Math.max(floor(), w), commit).catch(quiet);
   return (
@@ -220,7 +222,7 @@ function ResizeEdge(props: { minWidth: () => number }) {
       onPointerMove={(e) => {
         const d = drag.current;
         if (!d || (e.buttons & 1) === 0) return;
-        d.next = Math.min(MINI_MAX_W, Math.max(floor(), Math.round(d.w + e.screenX - d.x)));
+        d.next = Math.min(MINI_MAX_W, Math.max(floor(), Math.round(d.w + 2 * (e.screenX - d.x))));
         if (d.frame == null) {
           d.frame = requestAnimationFrame(() => {
             if (drag.current) drag.current.frame = null;

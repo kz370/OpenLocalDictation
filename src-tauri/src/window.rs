@@ -935,8 +935,35 @@ pub fn resize_overlay_mini(app: &AppHandle, width: u32) {
             return;
         }
         suppress_persistence();
+        // The window grows and shrinks around its horizontal center, so the
+        // bubble's circle (centered in it) and the taskbar button the pill is
+        // anchored to never drift away from the pill's middle.
+        let old = w.outer_position().ok().zip(w.outer_size().ok());
         MINI_WIDTH.store(width, Ordering::Relaxed);
         let _ = w.set_size(overlay_window_size());
+        if let Some(a) = taskbar_anchor(&app2) {
+            if let Some(((x, y), (ax, ay))) = anchored_position(&w, &a) {
+                let _ = w.set_position(PhysicalPosition::new(x, y));
+                let _ = app2.emit_to(
+                    OVERLAY,
+                    "overlay://anchor",
+                    serde_json::json!({ "x": ax, "y": ay }),
+                );
+            }
+        } else if let Some((pos, size)) = old {
+            let scale = w.scale_factor().unwrap_or(1.0);
+            let new_w = (width as f64 * scale).round() as i32;
+            let center = pos.x + size.width as i32 / 2;
+            let mut x = center - new_w / 2;
+            // Stay on the monitor the window is on, when it fits there.
+            if let Ok(Some(m)) = w.current_monitor() {
+                let (mx, mw) = (m.position().x, m.size().width as i32);
+                if new_w <= mw {
+                    x = x.clamp(mx, mx + mw - new_w);
+                }
+            }
+            let _ = w.set_position(PhysicalPosition::new(x, pos.y));
+        }
         set_overlay_region(&app2, &w, true);
     });
 }
