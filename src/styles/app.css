@@ -418,29 +418,33 @@ html.overlay {
 .overlay-card.mini.bubble {
   width: 44px;
   height: 44px;
-  margin: calc(var(--menu-room) + 12px) 0 0 calc(50% - 22px + var(--orb-shift, 0px));
+  margin: calc(var(--menu-room) + 12px) 0 0 calc(50% - 22px);
   padding: 0;
   border-radius: 50%;
 }
 
+/* The circle only drags while Ctrl is held (see .grab below), so at rest it
+   makes no promise of one: the mic button inside keeps its own pointer. */
 .overlay-orb {
   position: absolute;
   inset: 0;
   display: grid;
   place-items: center;
   border-radius: 50%;
-  cursor: move;
+  cursor: default;
 }
 
 /* Pop-in when the overlay is shown: zooms up from the middle with a soft
-   fade. Two class names so React can restart the animation on every show.
+   fade, on an emphasised-decelerate curve so most of the travel is still on
+   screen after the first two frames (a front-loaded curve reads as a snap).
+   Two class names so React can restart the animation on every show.
    No fill-mode: at rest there is no transform (the language menu relies on it). */
 .overlay-card.mini.pop-1 {
-  animation: overlay-pop 260ms cubic-bezier(0.2, 0.9, 0.3, 1);
+  animation: overlay-pop 240ms cubic-bezier(0.2, 0, 0, 1);
 }
 
 .overlay-card.mini.pop-2 {
-  animation: overlay-pop-b 260ms cubic-bezier(0.2, 0.9, 0.3, 1);
+  animation: overlay-pop-b 240ms cubic-bezier(0.2, 0, 0, 1);
 }
 
 /* visibility, not just opacity: a running pop-in animation overrides opacity. */
@@ -450,30 +454,46 @@ html.overlay {
 }
 
 /* Zoom-out on close: the reverse of the pop-in; it holds its end state until
-   the window hides. Declared after the pop classes so it wins. */
+   the window hides. Declared after the pop classes so it wins. Must finish
+   inside CLOSE_ANIM_MS (window.rs) or the window hides mid-animation. */
 .overlay-card.closing,
 .overlay-card.mini.closing {
-  animation: overlay-close 200ms cubic-bezier(0.4, 0, 0.8, 0.2) forwards;
+  animation: overlay-close 180ms cubic-bezier(0.4, 0, 1, 1) forwards;
 }
 
 @keyframes overlay-close {
   from { opacity: 1; transform: scale(1); }
-  to { opacity: 0; transform: scale(0.4); }
+  to { opacity: 0; transform: scale(0.55); }
 }
 
 @keyframes overlay-pop {
-  from { opacity: 0; transform: scale(0.4); }
+  from { opacity: 0; transform: scale(0.55); }
   to { opacity: 1; transform: scale(1); }
 }
 
 @keyframes overlay-pop-b {
-  from { opacity: 0; transform: scale(0.4); }
+  from { opacity: 0; transform: scale(0.55); }
   to { opacity: 1; transform: scale(1); }
 }
 
 /* Tinted halo around the mic button. */
 .overlay-orb .overlay-mic:not(.live) {
   box-shadow: 0 0 0 5px color-mix(in srgb, var(--accent) 22%, transparent);
+}
+
+/* Ctrl held: the circle is about to be dragged on its own (the pill stays
+   shut), so the cursor says "grab" rather than the four-way move. It covers
+   the mic button as well, which otherwise shows its own pointer. */
+.overlay-orb.grab,
+.overlay-orb.grab .overlay-mic {
+  cursor: grab;
+}
+
+/* Any drag in progress (header, circle or mic button): the closed hand
+   everywhere, set on <html> by the page for the length of the drag. */
+html.dragging,
+html.dragging * {
+  cursor: grabbing !important;
 }
 
 .overlay-orb.locked {
@@ -498,25 +518,29 @@ html.overlay {
 /* The pill above the circle, without the mic: the window's full small width,
    ORB_GAP (6px) above the circle. Offsets are from the circle's padding box
    (inside its 1px border): left lands the pill 8px from the window's left
-   edge. It pops out of the circle: it fades in while growing from the
+   edge. The circle is centred in the window and the pill fills it, so the two
+   are one rigid body: the window is what moves, and it is clamped so the
+   whole pill stays on the monitor, which is what keeps the circle away from
+   the screen's edge. It pops out of the circle: it fades in while growing from the
    circle's center (28px below the pill) and settles, and shrinks back into
-   it when hidden. At rest there is no transform, so the language menu
-   (position: fixed, only open while the pill shows) keeps the window as its
-   frame. */
+   it when hidden. Opacity and transform share a curve and end together, so
+   the pill is never solid while it is still moving. At rest there is no
+   transform, so the language menu (position: fixed, only open while the pill
+   shows) keeps the window as its frame. */
 .overlay-pill {
   position: absolute;
   z-index: 2;
-  left: calc(29px - 50vw - var(--orb-shift, 0px));
+  left: calc(29px - 50vw);
   bottom: calc(100% + 7px);
   width: calc(100vw - 16px);
   height: 52px;
   pointer-events: none;
   opacity: 0;
-  transform: translateY(6px) scale(0.6);
-  transform-origin: calc(50% + var(--orb-shift, 0px)) calc(100% + 28px);
+  transform: scale(0.62);
+  transform-origin: 50% calc(100% + 28px);
   transition:
-    opacity 120ms ease,
-    transform 160ms cubic-bezier(0.4, 0, 1, 1);
+    opacity 130ms linear,
+    transform 150ms cubic-bezier(0.4, 0, 1, 1);
 }
 
 .overlay-pill.shown {
@@ -524,8 +548,8 @@ html.overlay {
   opacity: 1;
   transform: none;
   transition:
-    opacity 140ms ease,
-    transform 260ms cubic-bezier(0.2, 1.25, 0.4, 1);
+    opacity 180ms cubic-bezier(0.2, 0, 0, 1),
+    transform 240ms cubic-bezier(0.2, 0, 0, 1);
 }
 
 /* The drawn pill. */

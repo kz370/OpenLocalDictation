@@ -905,8 +905,10 @@ fn hide_overlay_window(app: &AppHandle, w: &WebviewWindow) {
     });
 }
 
-/// How long the page's zoom-out takes before the overlay window hides.
-const CLOSE_ANIM_MS: u64 = 200;
+/// How long the page's zoom-out takes before the overlay window hides. A
+/// frame longer than the `overlay-close` animation in app.css (180 ms), so
+/// the window never hides while the card is still fading.
+const CLOSE_ANIM_MS: u64 = 210;
 /// Bumped by every hide request and every show, so a late hide can tell it was overtaken.
 static HIDE_TOKEN: AtomicU64 = AtomicU64::new(0);
 /// A zoom-out is playing and the window has not hidden yet.

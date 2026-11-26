@@ -23,6 +23,7 @@ const EN: Record<string, string> = {
   "overlay.idleHint": "Press {{keys}} or click the mic · nothing is heard until then",
   "overlay.micStart": "Start dictation",
   "overlay.middleClose": "middle-click to close",
+  "overlay.ctrlDrag": "hold Ctrl to drag the mic on its own",
   "overlay.micStop": "Stop and insert",
   "overlay.pin": "Pin: keep on screen, always on top",
   "overlay.unpin": "Unpin: hide when not dictating",

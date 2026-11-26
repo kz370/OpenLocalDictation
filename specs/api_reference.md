@@ -68,7 +68,7 @@ There is **no** command that removes the CUDA libraries.
 | `dictation://target` | `{ targetApp }` | all | Friendly name of the window text will go into. |
 | `dictation://review-shortcut` | `"insert" \| "retry" \| "cancel"` | overlay | Review keys pressed while another app has focus. |
 | `overlay://shown` | `()` | overlay | The overlay window was just shown from hidden (or a pending zoom-out was cancelled); the page reveals the card with its pop-in zoom. |
-| `overlay://hiding` | `()` | overlay | A close was requested: the page plays a 200 ms zoom-out. The window hides after `CLOSE_ANIM_MS` (200 ms) unless it is shown again meanwhile. |
+| `overlay://hiding` | `()` | overlay | A close was requested: the page plays a 180 ms zoom-out. The window hides after `CLOSE_ANIM_MS` (210 ms) unless it is shown again meanwhile. |
 | `overlay://hidden` | `()` | overlay | The overlay is about to hide: the page resets to a bare idle card and turns invisible until the next `overlay://shown`. |
 | `voice://event` | `VoiceEvent` | overlay | Only `level` (value + 24 spectrum bands) and `partial` (live text). |
 | `settings://changed` | `Settings` | all | |
