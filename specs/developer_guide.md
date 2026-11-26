@@ -10,7 +10,8 @@
 src/                 React UI (overlay + settings), Vite, TypeScript strict
 src-tauri/           Rust backend (crate local-dictation, lib local_dictation_lib)
 specs/               source of truth (this folder)
-build.bat            release build + portable folder + installer
+build.bat            release build + portable folder and zip + installer + release notes
+bump-version.ps1     bumps the version everywhere and writes the release notes
 local-dictation.iss  Inno Setup script
 AGENTS.md            contributor rules
 ```
@@ -40,9 +41,11 @@ npm run typecheck && npm run build
 ## 5. Release build
 `build.bat` → `release\v<version>\`:
 * `Open-Local-Dictation-<version>-portable\` — exe plus `sherpa-onnx-c-api.dll`, `sherpa-onnx-cxx-api.dll`, `onnxruntime.dll`, `onnxruntime_providers_shared.dll`
-* `Open-Local-Dictation-<version>-setup.exe` (when Inno Setup is found)
+* `Open-Local-Dictation-<version>-portable.zip` — the portable folder zipped
+* `Open-Local-Dictation-<version>-setup.exe` (when Inno Setup is found); `local-dictation.iss` sets `PrivilegesRequired=admin` and installs for all users into `{autopf}` (Program Files)
+* `RELEASE_NOTES.md` — copied from `release-notes<version>.md` when that file exists
 
-The version comes from the `version` line of `src-tauri/Cargo.toml`; keep `tauri.conf.json` and `package.json` equal to it. Builds use half the CPU threads (`--jobs`).
+The version comes from the `version` line of `src-tauri/Cargo.toml`. Do not edit versions by hand: `.<<BS>>ump-version.ps1 patch|minor|major|X.Y.Z` (add `-DryRun` to preview) updates `Cargo.toml`, `Cargo.lock`, `tauri.conf.json`, `package.json`, `package-lock.json` and the title line of four specs documents, writes `release-notes<version>.md` from the Conventional Commit subjects since the last `v*` tag (tracked in git, unlike `release\`) and logs the bump in `specs/runtime.md`. Passing the current version only rewrites its notes. Release steps: bump, review and commit, `build.bat`, then `gh release create v<version> release<version>\*.exe release<version>\*.zip --title v<version> --notes-file release-notes<version>.md`. Builds use half the CPU threads (`--jobs`).
 Release profile: `opt-level = "s"`, LTO, `codegen-units = 1`, `panic = "abort"`, `strip`. Exe about 6.4 MB; the four DLLs about 22.8 MB (`onnxruntime.dll` 17.8 MB).
 
 ## 6. Adding things

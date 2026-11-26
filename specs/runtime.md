@@ -67,3 +67,4 @@ Files Processed: 65 — COMPLETE
 - [2026-11-27T09:20:00Z] Fix: language menu was cut off past the window's left edge when the chip sits on the left (bubble pill); it now aligns to the chip's outer side and stays inside the window.
 - [2026-11-27T09:40:00Z] Fix: no edit window when the transcript is empty (live preview skipped without text; an empty final result closes the preview and restores focus).
 - [2026-11-27T10:00:00Z] Added specs/plans/taskbar-widget.md: plan for an opt-in mic button inside the Windows taskbar (not implemented).
+- [2026-11-26T11:00:00Z] Release tooling: build.bat also zips the portable folder and copies the release notes; new bump-version.ps1 (version everywhere + release-notes<version>.md); first release v0.1.0.

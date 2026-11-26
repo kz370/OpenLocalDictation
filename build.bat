@@ -2,7 +2,8 @@
 setlocal EnableExtensions
 rem ---------------------------------------------------------------------------
 rem  Open Local Dictation - build the release exe, a portable folder and (when
-rem  Inno Setup is installed) a setup file. Output: release\v<version>\
+rem  Inno Setup is installed) a setup file, a portable zip and the release notes.
+rem  Output: release\v<version>\
 rem
 rem  Needs: Rust (MSVC toolchain) and Node.js. Builds use half the CPU threads.
 rem ---------------------------------------------------------------------------
@@ -45,6 +46,10 @@ if defined ISCC (
 ) else (
   echo       Inno Setup not found - skipping the setup file, the portable folder is ready.
 )
+rem Portable zip and the release notes (written by bump-version.ps1) next to the setup.
+if exist "%DIST%\Open-Local-Dictation-%VERSION%-portable.zip" del /q "%DIST%\Open-Local-Dictation-%VERSION%-portable.zip"
+powershell -NoProfile -Command "Compress-Archive -Path '%PORTABLE%\*' -DestinationPath '%DIST%\Open-Local-Dictation-%VERSION%-portable.zip' -Force" || goto :fail
+if exist "%ROOT%release-notes\v%VERSION%.md" copy /y "%ROOT%release-notes\v%VERSION%.md" "%DIST%\RELEASE_NOTES.md" >nul
 echo Done: %DIST%
 exit /b 0
 
