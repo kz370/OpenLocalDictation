@@ -42,7 +42,7 @@ shortcuts.rs       :: start_watcher (Windows), esc_pressed, is_modifier_only_sho
 shortcuts.rs       :: register_review_shortcuts, unregister_all — review keys (Ctrl+Enter, Ctrl+Shift+Enter, Ctrl+Shift+Backspace) and recording release.
 window.rs          :: set_overlay_bubble, set_overlay_card, ensure_settings, open_settings — frameless fixed 780x656 settings window, hide-on-close.
 window.rs          :: resize_overlay_mini, create_overlay, show_overlay, hide_overlay, hide_overlay_if_session_idle, sync_overlay_pin, show_idle_overlay, refresh_overlay_layout, reset_overlay_position, cancel_dictation — overlay lifecycle and drag-position persistence.
-window.rs          :: set_overlay_review, discard_review, set_overlay_menu, set_overlay_region, strip_frame_styles, set_overlay_activatable — review focus, window region clip, menu room.
+window.rs          :: set_overlay_review, discard_review, set_overlay_menu, set_overlay_region, clip_overlay_to_nothing, strip_frame_styles, set_overlay_activatable — review focus, window region clip, menu room.
 window.rs          :: remember_target, refresh_dictation_target, restore_target, dictation_target_name, application_display_name, focus_hwnd — target-app capture and focus return.
 typing.rs          :: LiveTyper{set_target,finish,retract,snapshot,reset}, committed_prefix — live word-committed typing with desync recovery.
 typing.rs          :: insert_text, finalize_text, type_text, key_events::type_char, reconcile — scancode typing (16 ms/char), clipboard paste, trailing space.

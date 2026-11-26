@@ -600,6 +600,26 @@ fn set_overlay_region(app: &AppHandle, w: &WebviewWindow, clip: bool) {
 #[cfg(not(windows))]
 fn set_overlay_region(_app: &AppHandle, _w: &WebviewWindow, _clip: bool) {}
 
+/// Clips the overlay to nothing, so that nothing of it can be painted while the
+/// window library re-adds the frame styles (showing the window does that, and
+/// the classic title bar flashed for a frame before the real region was back).
+#[cfg(windows)]
+fn clip_overlay_to_nothing(app: &AppHandle) {
+    use windows::Win32::Graphics::Gdi::{CreateRectRgn, SetWindowRgn};
+    let raw = overlay_hwnd(app);
+    if raw == 0 {
+        return;
+    }
+    // SAFETY: plain Win32 calls on the overlay's own window handle; on success
+    // the system owns the region.
+    unsafe {
+        let _ = SetWindowRgn(hwnd_of(raw), Some(CreateRectRgn(0, 0, 0, 0)), false);
+    }
+}
+
+#[cfg(not(windows))]
+fn clip_overlay_to_nothing(_app: &AppHandle) {}
+
 /// Runs an overlay transition in one go on the main thread. Window changes
 /// requested from another thread (the dictation hotkey, the dictation flow)
 /// only run later on the main thread; mixed with the region changes made right
@@ -841,9 +861,12 @@ fn show_overlay_now(app: &AppHandle, w: &WebviewWindow) {
         // it is shown, or its whole transparent box flashes for a frame.
         *CARD_RECTS.lock().unwrap_or_else(|p| p.into_inner()) = Some(Vec::new());
     }
+    // Frame styles off and an empty region while the window is shown: showing
+    // re-adds the styles, and any paint in between draws the title bar.
     set_overlay_region(app, w, true);
+    clip_overlay_to_nothing(app);
     let _ = w.show();
-    // After showing: that re-adds the frame styles the region needs gone.
+    // After showing: strip the re-added frame styles, then the real region.
     set_overlay_region(app, w, true);
     if !was_visible || interrupted {
         // The page plays its pop-in; a card that was already on screen stays put.
