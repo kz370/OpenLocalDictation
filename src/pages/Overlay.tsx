@@ -406,6 +406,35 @@ export function Overlay() {
   const headRef = useRef<HTMLDivElement>(null);
   // Small idle pill folds to a circle; a short hover unfolds it.
   const [hover, setHover] = useState(false);
+  // 0 = never shown since load; 1/2 alternate so each show restarts the pop-in.
+  const [pop, setPop] = useState<0 | 1 | 2>(0);
+  // True between a hide and the next show: the card is invisible so it never
+  // flashes before its pop-in.
+  const [away, setAway] = useState(false);
+  // The zoom-out plays between a close request and the window hiding.
+  const [closing, setClosing] = useState(false);
+  // First start: the card stays invisible until the settings are in (before
+  // that it would draw in the wrong layout), then pops in. Safety net: after
+  // 2 s it shows regardless.
+  const settingsLoaded = useSettings((s) => s.settings !== null);
+  const [firstReveal, setFirstReveal] = useState(false);
+  // Read by the event handlers (subscribed once): a "shown" that arrives before
+  // the first reveal is ignored, the reveal itself plays the pop-in.
+  const revealedRef = useRef(false);
+  useEffect(() => {
+    if (firstReveal) return;
+    const reveal = () => {
+      revealedRef.current = true;
+      setFirstReveal(true);
+      setPop((p) => (p === 1 ? 2 : 1));
+    };
+    if (settingsLoaded) {
+      reveal();
+      return;
+    }
+    const id = window.setTimeout(reveal, 2000);
+    return () => window.clearTimeout(id);
+  }, [settingsLoaded, firstReveal]);
   const hoverTimer = useRef<number | undefined>(undefined);
   const hoverIn = () => {
     window.clearTimeout(hoverTimer.current);
@@ -467,6 +496,37 @@ export function Overlay() {
         }
         if (e.error) setError(errorMessage(e.error.code, e.error.detail));
         if (e.result?.inserted) setText(e.result.inserted);
+      }),
+      // Zoom-out before the window hides.
+      on<null>("overlay://hiding", () => setClosing(true)),
+      // The window is about to hide: go back to a clean idle page now, while
+      // nobody sees it, so the next show starts bare (no stale pill, hover or
+      // result) and invisible until its pop-in.
+      on<null>("overlay://hidden", () => {
+        window.clearTimeout(hoverTimer.current);
+        setHover(false);
+        previewRef.current = false;
+        reviewDoneRef.current = false;
+        reviewReadyRef.current = false;
+        draftRef.current = "";
+        draftDirty.current = false;
+        setState("idle");
+        setText("");
+        setError(null);
+        setTargetApp(null);
+        setCopied(false);
+        setReviewPreview(false);
+        setBands([]);
+        setLevel(0);
+        setClosing(false);
+        setAway(true);
+      }),
+      // Shown (or the tray was clicked): reveal with the pop-in. The A/B class pair restarts the animation.
+      on<null>("overlay://shown", () => {
+        if (!revealedRef.current) return;
+        setClosing(false);
+        setAway(false);
+        setPop((p) => (p === 1 ? 2 : 1));
       }),
       // A pinned overlay falls back to its idle card after each dictation.
       on<null>("overlay://idle", () => {
@@ -847,7 +907,7 @@ export function Overlay() {
 
   return (
     <div
-      className={`overlay-card${state === "inserted" ? " done" : ""}${miniView ? " mini" : ""}${bubble ? " bubble" : ""}`}
+      className={`overlay-card${state === "inserted" ? " done" : ""}${miniView ? " mini" : ""}${bubble ? " bubble" : ""}${away || !firstReveal ? " away" : ""}${closing ? " closing" : ""}${miniView && pop ? ` pop-${pop}` : ""}`}
       role="status"
       aria-live="polite"
       onPointerEnter={hoverIn}

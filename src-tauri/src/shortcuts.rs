@@ -92,11 +92,42 @@ fn windows_modifier_shortcut_pressed(keys: &str) -> bool {
         .all(windows_modifier_pressed)
 }
 
+/// In hold mode a press shorter than this is a tap: recording latches on and
+/// the next press stops it.
+const TAP_MAX: Duration = Duration::from_millis(400);
+static TAP_LATCHED: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+static PRESS_AT: std::sync::Mutex<Option<Instant>> = std::sync::Mutex::new(None);
+
 fn dispatch(app: &AppHandle, pressed: bool) {
     let state = app.state::<AppState>();
     let hold = state.settings.get().mode == "hold";
     let active = state.voice.is_active();
+    tracing::info!(
+        pressed,
+        active,
+        busy = state.dictation_busy.load(Ordering::Relaxed),
+        transcribing = state.voice.is_transcribing(),
+        "dictation shortcut"
+    );
+    if pressed && active && hold && TAP_LATCHED.swap(false, Ordering::Relaxed) {
+        // Recording was latched on by a quick tap: this press ends it.
+        state.voice.stop(false);
+        return;
+    }
+    if !pressed && active && hold {
+        let held = PRESS_AT
+            .lock()
+            .unwrap_or_else(|p| p.into_inner())
+            .map(|t| t.elapsed());
+        if held.is_some_and(|d| d < TAP_MAX) {
+            // A tap, not a hold: keep listening until the next press.
+            TAP_LATCHED.store(true, Ordering::Relaxed);
+            return;
+        }
+    }
     if pressed && !active {
+        TAP_LATCHED.store(false, Ordering::Relaxed);
+        *PRESS_AT.lock().unwrap_or_else(|p| p.into_inner()) = Some(Instant::now());
         // The shortcut again while the last take is still being transcribed or
         // waits for review: drop it and start a new recording. Blocking steps
         // run off this thread.
@@ -121,6 +152,7 @@ fn dispatch(app: &AppHandle, pressed: bool) {
 pub fn start_dictation(app: &AppHandle) {
     let state = app.state::<AppState>();
     if state.dictation_busy.load(Ordering::Relaxed) {
+        tracing::info!("start ignored: the previous take is still being inserted");
         return;
     }
     let generation = state
@@ -272,6 +304,7 @@ pub fn register_review_shortcuts(app: &AppHandle) -> Result<(), String> {
             }
         };
         if let Err(error) = gs.register(shortcut) {
+            tracing::warn!(keys, %error, "review shortcut registration failed");
             register_all(app);
             return Err(format!(
                 "could not register review shortcut {keys}: {error}"

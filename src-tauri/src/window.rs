@@ -744,9 +744,17 @@ fn show_overlay_now(app: &AppHandle, w: &WebviewWindow) {
     if let Some((x, y)) = pos {
         let _ = w.set_position(PhysicalPosition::new(x, y - room_px(w)));
     }
+    let was_visible = w.is_visible().unwrap_or(false);
+    // A zoom-out still playing is cancelled; the page must come back.
+    HIDE_TOKEN.fetch_add(1, Ordering::SeqCst);
+    let interrupted = HIDE_PENDING.swap(false, Ordering::SeqCst);
     let _ = w.show();
     // After showing: that re-adds the frame styles the region needs gone.
     set_overlay_region(app, w, true);
+    if !was_visible || interrupted {
+        // The page plays its pop-in; a card that was already on screen stays put.
+        let _ = app.emit_to(OVERLAY, "overlay://shown", ());
+    }
 }
 
 /// Clears the dragged overlay position and moves it back to the default spot
@@ -797,8 +805,13 @@ pub fn show_idle_overlay(app: &AppHandle) {
         if state.voice.is_active() || state.dictation_busy.load(Ordering::Relaxed) {
             return;
         }
+        let was_visible = w.is_visible().unwrap_or(false);
         show_overlay_now(&app2, &w);
         let _ = app2.emit_to(OVERLAY, "overlay://idle", ());
+        if was_visible {
+            // A visible (pinned) overlay: the tray click still gets its pop-in.
+            let _ = app2.emit_to(OVERLAY, "overlay://shown", ());
+        }
     });
 }
 
@@ -871,10 +884,35 @@ fn hide_overlay_window(app: &AppHandle, w: &WebviewWindow) {
         let _ = app.emit_to(OVERLAY, "overlay://idle", ());
         return;
     }
-    let _ = w.hide();
-    // Showing it again changes its styles; that must not happen while clipped.
-    set_overlay_region(app, w, false);
+    // The page plays its zoom-out first; the window hides when that is done,
+    // unless the overlay was shown again meanwhile (the token moved on).
+    let token = HIDE_TOKEN.fetch_add(1, Ordering::SeqCst) + 1;
+    HIDE_PENDING.store(true, Ordering::SeqCst);
+    let _ = app.emit_to(OVERLAY, "overlay://hiding", ());
+    let (app2, w2) = (app.clone(), w.clone());
+    std::thread::spawn(move || {
+        std::thread::sleep(std::time::Duration::from_millis(CLOSE_ANIM_MS));
+        let app3 = app2.clone();
+        on_main(&app2, move || {
+            if HIDE_TOKEN.load(Ordering::SeqCst) != token {
+                return;
+            }
+            HIDE_PENDING.store(false, Ordering::SeqCst);
+            // The page resets itself to a bare idle card now, so the next show starts clean.
+            let _ = app3.emit_to(OVERLAY, "overlay://hidden", ());
+            let _ = w2.hide();
+            // Showing it again changes its styles; that must not happen while clipped.
+            set_overlay_region(&app3, &w2, false);
+        });
+    });
 }
+
+/// How long the page's zoom-out takes before the overlay window hides.
+const CLOSE_ANIM_MS: u64 = 200;
+/// Bumped by every hide request and every show, so a late hide can tell it was overtaken.
+static HIDE_TOKEN: AtomicU64 = AtomicU64::new(0);
+/// A zoom-out is playing and the window has not hidden yet.
+static HIDE_PENDING: AtomicBool = AtomicBool::new(false);
 
 /// Closes the overlay right away (Esc / overlay X). Whatever is in flight is
 /// dropped: listening stops without inserting, a result waiting for review is
