@@ -55,7 +55,7 @@ The overlay's language pill (and Settings → Dictation → Language) selects Au
 * Crash guard: if a GPU start dies before a model loads, the next launch switches `device` to `cpu`.
 
 ### 2.8 Settings window
-Frameless, fixed 780 x 640, no resize or maximize; own title bar (minimize, close-to-tray). Tabs: **Speech model** (folder + models), **Processing**, **Dictation** (shortcut, behaviour, language, microphone, review, insert method, trailing space, overlay position), **App** (start with Windows, theme, logs). The page never scrolls, and the model list is shown in full (the window height covers it). Every Reset button has an icon and asks first through the themed `Dialog`.
+Frameless, fixed 780 x 640, no resize or maximize; own title bar (app icon, minimize, close-to-tray). The title bar and the header brand mark show the real app icon (`public/app-icon.png`, a copy of `src-tauri/icons/128x128.png`; replace it whenever the app icon changes). Tabs: **Speech model** (folder + models), **Processing**, **Dictation** (shortcut, behaviour, language, microphone, review, insert method, trailing space, overlay position), **App** (start with Windows, theme, logs). The page never scrolls, and the model list is shown in full (the window height covers it). Every Reset button has an icon and asks first through the themed `Dialog`.
 
 ### 2.9 Tray
 Left click opens the idle dictation window. Menu: Show dictation window (opens the idle overlay; nothing is recorded until the shortcut or the mic button), Settings, Quit. A second launch opens settings.

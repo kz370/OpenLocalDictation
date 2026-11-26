@@ -1,6 +1,6 @@
 import { Fragment, useCallback, useEffect, useMemo, useState } from "react";
 import { open as pickFolder } from "@tauri-apps/plugin-dialog";
-import { Cpu, Download, FolderOpen, Mic, Minus, RotateCcw, RotateCw, X, Zap } from "lucide-react";
+import { Cpu, Download, FolderOpen, Minus, RotateCcw, RotateCw, X, Zap } from "lucide-react";
 import { ipc, on, toAppError } from "../ipc";
 import { KNOWN_LANGUAGES } from "../knownLanguages";
 import { useSettings } from "../settingsStore";
@@ -370,7 +370,7 @@ export function SettingsPage() {
     <div className="settings-shell">
       <header className="titlebar" data-tauri-drag-region>
         <span className="titlebar-title" data-tauri-drag-region>
-          <Mic size={14} aria-hidden /> Open Local Dictation
+          <img className="app-icon-sm" src="/app-icon.png" alt="" aria-hidden /> Open Local Dictation
         </span>
         <div className="titlebar-buttons">
           <button type="button" className="icon-btn" aria-label="Minimize" title="Minimize" onClick={() => void ipc.settingsMinimize()}>
@@ -384,7 +384,7 @@ export function SettingsPage() {
       <main className="settings-main">
         <div className="brand">
           <span className="brand-mark" aria-hidden>
-            <Mic size={18} />
+            <img src="/app-icon.png" alt="" />
           </span>
           <div>
             <h1>Open Local Dictation</h1>
