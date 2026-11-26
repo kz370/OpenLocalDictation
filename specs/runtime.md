@@ -15,3 +15,10 @@ Files Processed: 65 — COMPLETE
 
 ## Log
 - [2026-11-26T15:00:00Z] Project created as its own repository from the dictation feature of Open Local Assistant, with the full specs set. Behaviour at this point: Whisper tiny/base/small, searchable language lists, CPU/GPU choice with CUDA-pack reuse, review before insert (default on), user-selectable shared models folder with detection of existing Whisper folders, frameless fixed-size tabbed settings window, themed confirmation dialogs for every reset, and no way to delete models or the CUDA libraries.
+- [2026-11-26T16:00:00Z] Settings model list no longer scrolls inside its card (removed 200px cap); settings window height 700 -> 780 so the list fits. Specs updated.
+- [2026-11-26T16:30:00Z] Added Arabic and German to knownLanguages; overlay language menu can be limited to chosen languages (settings.shownLanguages, empty = all); settings window height 780 -> 750.
+- [2026-11-26T16:45:00Z] Language picker dialog groups checked languages on top, divider, then the rest.
+- [2026-11-26T17:00:00Z] SearchSelect menu: wider (up to 380px), long options wrap, no horizontal scroll.
+- [2026-11-26T17:10:00Z] SearchSelect: menu matches button again (340px wide in rows), no focus outline on the menu; long text still wraps.
+- [2026-11-26T17:20:00Z] Settings window height 750 -> 690, measured from the running app (Dictation tab, the tallest, ended ~90px above the bottom).
+- [2026-11-26T17:30:00Z] App icon (all src-tauri/icons files) and the settings header brand mark recoloured from teal to green; shape unchanged. Rebuild needed for the exe/tray icon.

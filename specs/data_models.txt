@@ -7,6 +7,7 @@ Settings (settings.rs, stored in <data>\settings.json; unknown/missing fields fa
   modelsDir            string   ""                      "" = <data>\models; set only by models_set_dir
   device               string   "gpu"                   "gpu" | "cpu"; GPU only takes effect once the CUDA pack is installed and the app restarted
   language             string   "auto"                  "auto" or a Whisper language code (lower case)
+  shownLanguages       string[] []                      language codes listed in the overlay menu; empty = all (deduped on sanitize)
   microphone           string?  null                    null = system default input
   shortcut             string   "CommandOrControl+Alt+Space"
   mode                 string   "hold"                  "hold" | "toggle"
@@ -70,5 +71,5 @@ Constants
   Audio: 16 kHz mono, 100 Hz one-pole high-pass, level = RMS mapped -60..0 dB, spectrum = 24 log bands 80 Hz..4 kHz.
   MIN_AUDIO_MS 350 · MAX_RECORDING 300 s · VAD window 512 samples · utterances are at most 20 s (VAD max_speech_duration), so Whisper never needs chunking.
   Typing: 16 ms per character (measured; faster drops characters), review focus delay 150 ms.
-  Overlay card 480 x 176 logical px; menu room 240 px above/below; settings window 780 x 700.
+  Overlay card 480 x 176 logical px; menu room 240 px above/below; settings window 780 x 690.
   Overlay linger after a take: 800 ms (inserted), 2200 ms (message).

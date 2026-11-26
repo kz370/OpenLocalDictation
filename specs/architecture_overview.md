@@ -44,7 +44,7 @@ Native: sherpa-onnx + ONNX Runtime DLLs (shared), WASAPI via cpal, Win32 SendInp
 | Label | Purpose | Frame |
 |---|---|---|
 | `overlay` | The dictation card. Transparent, always on top, no taskbar entry, clipped to the card with a window region; does not take focus while listening, takes it in review. | none |
-| `settings` | Four tabs (Speech model, Processing, Dictation, App). Fixed 780 x 700, not resizable or maximizable. | none; the page draws its own title bar (minimize, close-to-tray) |
+| `settings` | Four tabs (Speech model, Processing, Dictation, App). Fixed 780 x 690, not resizable or maximizable. | none; the page draws its own title bar (minimize, close-to-tray) |
 
 The app lives in the tray. Closing settings only hides them; `Quit` in the tray exits.
 

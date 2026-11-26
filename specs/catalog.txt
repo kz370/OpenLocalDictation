@@ -32,7 +32,7 @@ tray.rs            :: create, quit — tray menu (Dictate, Settings, Quit); left
 shortcuts.rs       :: register_all, handle, dispatch, start_dictation, toggle_dictation, watch_dictation_target — hotkey (hold/toggle) and target tracking.
 shortcuts.rs       :: start_watcher (Windows), esc_pressed, is_modifier_only_shortcut, is_supported_modifier_only, windows_modifier_* — modifier-only combos (2+ modifiers) and Esc cancel.
 shortcuts.rs       :: register_review_shortcuts, unregister_all — review keys (Ctrl+Enter, Ctrl+Shift+Enter, Ctrl+Shift+Backspace) and recording release.
-window.rs          :: ensure_settings, open_settings — frameless fixed 780x700 settings window, hide-on-close.
+window.rs          :: ensure_settings, open_settings — frameless fixed 780x690 settings window, hide-on-close.
 window.rs          :: create_overlay, show_overlay, hide_overlay, hide_overlay_if_session_idle, reset_overlay_position, cancel_dictation — overlay lifecycle and drag-position persistence.
 window.rs          :: set_overlay_review, discard_review, set_overlay_menu, set_overlay_region, strip_frame_styles, set_overlay_activatable — review focus, window region clip, menu room.
 window.rs          :: remember_target, refresh_dictation_target, restore_target, dictation_target_name, application_display_name, focus_hwnd — target-app capture and focus return.
@@ -54,7 +54,7 @@ ipc.ts                         :: ipc (typed invoke wrappers), on (event subscri
 types.ts                       :: TypeScript mirrors of every wire type.
 strings.ts                     :: t (English text), errorMessage (code -> fix text), formatBytes.
 settingsStore.ts               :: useSettings (zustand), applyTheme (system/light/dark following the OS).
-knownLanguages.ts              :: KNOWN_LANGUAGES — ~80 Whisper language codes with English and native names.
+knownLanguages.ts              :: KNOWN_LANGUAGES — ~80 Whisper language codes (incl. Arabic, German) with English and native names.
 pages/Overlay.tsx              :: Overlay — states, live text, spectrum, target-app tab, language pill, review editor, drag; PillMenu, HeadBtn, useOverlayDrag.
 pages/Settings.tsx             :: SettingsPage — frameless title bar + four tabs; ModelCard (folder, models, downloads), ProcessingCard (CPU/GPU, CUDA), Dictation card, App card.
 components/SearchSelect.tsx    :: SearchSelect — compact dropdown, filter box when the list is longer than six.

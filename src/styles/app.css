@@ -639,7 +639,7 @@ html.overlay {
   height: 40px;
   border-radius: 12px;
   color: var(--accent-contrast);
-  background: linear-gradient(145deg, #2dd4bf, #0d9488);
+  background: linear-gradient(145deg, #34d36b, #0d8a45);
 }
 
 .model-item {
@@ -676,7 +676,7 @@ html[data-route="settings"] body {
 .ss {
   position: relative;
   width: 100%;
-  max-width: 320px;
+  max-width: 340px;
 }
 
 .ss-button {
@@ -699,6 +699,7 @@ html[data-route="settings"] body {
   z-index: 20;
   top: calc(100% + 4px);
   inset-inline: 0;
+  outline: 0;
   display: flex;
   flex-direction: column;
   padding: 4px;
@@ -738,6 +739,7 @@ html[data-route="settings"] body {
 /* About six rows tall, then it scrolls. */
 .ss-list {
   max-height: 168px;
+  overflow-x: hidden;
   overflow-y: auto;
   display: flex;
   flex-direction: column;
@@ -748,8 +750,8 @@ html[data-route="settings"] body {
   align-items: center;
   gap: 8px;
   flex: none;
-  height: 28px;
-  padding: 0 8px;
+  min-height: 28px;
+  padding: 4px 8px;
   border: 0;
   border-radius: 6px;
   background: transparent;
@@ -757,7 +759,8 @@ html[data-route="settings"] body {
   font-size: var(--text-xs);
   text-align: start;
   cursor: pointer;
-  white-space: nowrap;
+  white-space: normal;
+  overflow-wrap: anywhere;
 }
 
 .ss-option[data-active="true"] {
@@ -886,7 +889,8 @@ html[data-route="settings"] body {
 
 .row-control .ss,
 .row-control .select {
-  width: 260px;
+  width: 340px;
+  max-width: 100%;
 }
 
 /* Below this width the control drops under its label instead of squeezing it. */
@@ -971,12 +975,6 @@ html[data-route="settings"] body {
   margin-bottom: 0;
 }
 
-/* A long list of models scrolls inside its card, never the whole page. */
-.model-list {
-  max-height: 200px;
-  overflow-y: auto;
-}
-
 /* Long folder paths wrap inside dialogs instead of running off the edge. */
 .dialog code {
   overflow-wrap: anywhere;
@@ -985,4 +983,32 @@ html[data-route="settings"] body {
 
 html[data-route="settings"] body {
   overflow: hidden;
+}
+
+/* Language picker dialog: its own list scrolls, the page does not. */
+.lang-pick {
+  max-height: 280px;
+  overflow-y: auto;
+  margin: 8px 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.lang-pick-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 4px;
+  cursor: pointer;
+}
+
+.lang-pick-item input {
+  accent-color: var(--accent);
+}
+
+.lang-pick-divider {
+  height: 1px;
+  margin: 6px 0;
+  background: var(--border);
+  flex: none;
 }

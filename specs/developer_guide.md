@@ -55,7 +55,7 @@ Add the field to `Settings` (+ default + `sanitize`), `src/types.ts`, the UI row
 ### A model
 Add a `CatalogModel` in `models.rs` with the exact file sizes and SHA-256 of each file (`curl https://huggingface.co/api/models/<repo>/tree/main` lists `lfs.oid` for large files; hash small files yourself). Update `data_models.txt`.
 ### UI rules
-Use `Dialog` for every confirmation; every reset/restore button gets an icon and a confirmation; no purple; English only; new dropdowns use `SearchSelect`; keep every settings tab inside the fixed 780 x 700 window without page scroll.
+Use `Dialog` for every confirmation; every reset/restore button gets an icon and a confirmation; no purple; English only; new dropdowns use `SearchSelect` (menu matches its 340px button and long option text wraps; never horizontal scroll); keep every settings tab inside the fixed 780 x 690 window without page scroll.
 
 ## 7. Debugging
 * Logs: Settings → App → Open logs (`LOCAL_DICTATION_LOG=debug` for more; the microphone level is logged once per second at debug level).

@@ -15,6 +15,8 @@ const LIST: [string, string, string][] = [
   ["en", "English", "English"],
   ["zh", "Chinese", "中文"],
   ["es", "Spanish", "Español"],
+  ["ar", "Arabic", "العربية"],
+  ["de", "German", "Deutsch"],
   ["fr", "French", "Français"],
   ["pt", "Portuguese", "Português"],
   ["ru", "Russian", "Русский"],

@@ -14,7 +14,7 @@ pub const OVERLAY: &str = "overlay";
 
 /// Logical size of the settings window; it never changes.
 const SETTINGS_W: f64 = 780.0;
-const SETTINGS_H: f64 = 700.0;
+const SETTINGS_H: f64 = 690.0;
 
 static SUPPRESS_UNTIL: AtomicU64 = AtomicU64::new(0);
 

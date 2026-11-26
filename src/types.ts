@@ -8,6 +8,8 @@ export interface Settings {
   modelsDir: string;
   device: "gpu" | "cpu";
   language: string;
+  /** Language codes in the overlay menu; empty = all. */
+  shownLanguages: string[];
   microphone: string | null;
   shortcut: string;
   mode: "hold" | "toggle";

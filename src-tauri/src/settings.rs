@@ -20,6 +20,8 @@ pub struct Settings {
     pub device: String,
     /// "auto" or a language code.
     pub language: String,
+    /// Language codes listed in the overlay's language menu; empty = all of them.
+    pub shown_languages: Vec<String>,
     /// None = system default microphone.
     pub microphone: Option<String>,
     pub shortcut: String,
@@ -48,6 +50,7 @@ impl Default for Settings {
             models_dir: String::new(),
             device: "gpu".into(),
             language: "auto".into(),
+            shown_languages: Vec::new(),
             microphone: None,
             shortcut: "CommandOrControl+Alt+Space".into(),
             mode: "hold".into(),
@@ -83,6 +86,9 @@ impl Settings {
         if self.language.trim().is_empty() {
             self.language = "auto".into();
         }
+        let mut seen = std::collections::HashSet::new();
+        self.shown_languages
+            .retain(|c| !c.trim().is_empty() && seen.insert(c.clone()));
         if self.shortcut.trim().is_empty() {
             self.shortcut = Settings::default().shortcut;
         }
@@ -165,7 +171,9 @@ mod tests {
         s.device = "tpu".into();
         s.silence_ms = 5;
         s.language = " ".into();
+        s.shown_languages = vec!["ar".into(), "".into(), "ar".into(), "de".into()];
         s.sanitize();
+        assert_eq!(s.shown_languages, vec!["ar", "de"]);
         assert_eq!(s.device, "gpu");
         assert_eq!(s.silence_ms, 300);
         assert_eq!(s.language, "auto");

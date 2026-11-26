@@ -37,7 +37,7 @@ With review off, words are typed live as they are committed; "Insert" at the end
 * "Add a space after the text" appends one space to the final text.
 
 ### 2.5 Language
-The overlay's language pill (and Settings → Dictation → Language) selects Automatic or one of ~80 Whisper languages with a filter box. The choice is saved. Mid-take, changing it restarts the take. Whisper switches language on a loaded model in place (`stt::engine::set_language`, well under a millisecond) instead of reloading.
+The overlay's language pill (and Settings → Dictation → Language) selects Automatic or one of ~80 Whisper languages with a filter box. The choice is saved. Mid-take, changing it restarts the take. Whisper switches language on a loaded model in place (`stt::engine::set_language`, well under a millisecond) instead of reloading. Settings → Dictation → "Languages in the overlay menu" switches the overlay menu between All and a chosen set (dialog with checkboxes, checked languages grouped on top with a divider above the rest; `shownLanguages`, empty = all). The current language and Automatic are always listed.
 
 ### 2.6 Models folder
 `modelsDir` points at a folder shared with other apps; nothing is moved or copied.
@@ -55,7 +55,7 @@ The overlay's language pill (and Settings → Dictation → Language) selects Au
 * Crash guard: if a GPU start dies before a model loads, the next launch switches `device` to `cpu`.
 
 ### 2.8 Settings window
-Frameless, fixed 780 x 700, no resize or maximize; own title bar (minimize, close-to-tray). Tabs: **Speech model** (folder + models), **Processing**, **Dictation** (shortcut, behaviour, language, microphone, review, insert method, trailing space, overlay position), **App** (start with Windows, theme, logs). The page never scrolls; only a long model list scrolls inside its card. Every Reset button has an icon and asks first through the themed `Dialog`.
+Frameless, fixed 780 x 690, no resize or maximize; own title bar (minimize, close-to-tray). Tabs: **Speech model** (folder + models), **Processing**, **Dictation** (shortcut, behaviour, language, microphone, review, insert method, trailing space, overlay position), **App** (start with Windows, theme, logs). The page never scrolls, and the model list is shown in full (the window height covers it). Every Reset button has an icon and asks first through the themed `Dialog`.
 
 ### 2.9 Tray
 Left click opens settings. Menu: Dictate (start, or stop and insert), Settings, Quit. A second launch opens settings.

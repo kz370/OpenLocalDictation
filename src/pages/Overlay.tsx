@@ -414,12 +414,13 @@ export function Overlay() {
     ? mode === "toggle" ? t("overlay.hintToggleReview") : t("overlay.hintReview")
     : mode === "toggle" ? t("overlay.hintToggle") : t("overlay.hint");
   const language = useSettings((st) => st.settings?.language || "auto");
+  const shown = useSettings((st) => st.settings?.shownLanguages);
   const languageOptions = useMemo(
     () => [
       { value: "auto", short: t("overlay.auto"), name: t("app.automatic") },
-      ...KNOWN_LANGUAGES.map((l) => ({ value: l.code, short: l.code.toUpperCase(), name: l.name === l.native ? l.name : `${l.name} · ${l.native}` })),
+      ...KNOWN_LANGUAGES.filter((l) => !shown?.length || shown.includes(l.code) || l.code === language).map((l) => ({ value: l.code, short: l.code.toUpperCase(), name: l.name === l.native ? l.name : `${l.name} · ${l.native}` })),
     ],
-    []
+    [shown, language]
   );
   const changeLanguage = (code: string) => {
     void ipc

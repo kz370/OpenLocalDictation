@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { Fragment, useCallback, useEffect, useMemo, useState } from "react";
 import { open as pickFolder } from "@tauri-apps/plugin-dialog";
 import { Cpu, Download, FolderOpen, Mic, Minus, RotateCcw, RotateCw, X, Zap } from "lucide-react";
 import { ipc, on, toAppError } from "../ipc";
@@ -15,6 +15,79 @@ const languageOptions: SearchOption[] = [
   { value: "auto", label: "Automatic (detect)" },
   ...KNOWN_LANGUAGES.map((l) => ({ value: l.code, label: l.name === l.native ? l.name : `${l.name} · ${l.native}` })),
 ];
+
+/** All languages, or a chosen few, in the overlay's language menu. */
+function LanguageFilter({ shown, onChange }: { shown: string[]; onChange: (v: string[]) => void }) {
+  const [open, setOpen] = useState(false);
+  const [draft, setDraft] = useState<string[]>([]);
+  const [query, setQuery] = useState("");
+  const all = shown.length === 0;
+  const rows = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    return KNOWN_LANGUAGES.filter((l) => !q || `${l.name} ${l.native} ${l.code}`.toLowerCase().includes(q));
+  }, [query]);
+  const edit = () => {
+    setDraft(shown);
+    setQuery("");
+    setOpen(true);
+  };
+  const toggle = (code: string) => setDraft((d) => (d.includes(code) ? d.filter((c) => c !== code) : [...d, code]));
+  return (
+    <>
+      <Segmented
+        label="Languages in the overlay menu"
+        value={all ? "all" : "some"}
+        options={[
+          { value: "all", label: "All" },
+          { value: "some", label: shown.length ? `Chosen (${shown.length})` : "Chosen…" },
+        ]}
+        onChange={(v) => (v === "all" ? onChange([]) : edit())}
+      />
+      {!all && (
+        <button className="btn btn-sm" onClick={edit}>
+          Edit…
+        </button>
+      )}
+      {open && (
+        <Dialog
+          title="Languages in the overlay menu"
+          onClose={() => setOpen(false)}
+          actions={
+            <>
+              <button className="btn" onClick={() => setOpen(false)}>
+                Cancel
+              </button>
+              <button
+                className="btn btn-primary"
+                disabled={draft.length === 0}
+                onClick={() => {
+                  onChange(draft);
+                  setOpen(false);
+                }}
+              >
+                Save
+              </button>
+            </>
+          }
+        >
+          <input className="input" placeholder="Search languages…" aria-label="Search languages" value={query} onChange={(e) => setQuery(e.target.value)} />
+          <div className="lang-pick">
+            {[...rows.filter((l) => draft.includes(l.code)), ...rows.filter((l) => !draft.includes(l.code))].map((l, i, arr) => (
+              <Fragment key={l.code}>
+                {i > 0 && draft.includes(arr[i - 1].code) && !draft.includes(l.code) && <div className="lang-pick-divider" role="separator" />}
+                <label className="lang-pick-item">
+                  <input type="checkbox" checked={draft.includes(l.code)} onChange={() => toggle(l.code)} />
+                  {l.name === l.native ? l.name : `${l.name} · ${l.native}`}
+                </label>
+              </Fragment>
+            ))}
+          </div>
+          <p className="row-hint">{draft.length === 0 ? "Pick at least one language, or choose All." : `${draft.length} selected. Automatic is always shown.`}</p>
+        </Dialog>
+      )}
+    </>
+  );
+}
 
 const percent = (done: number, total: number) => (total > 0 ? Math.min(100, Math.round((done / total) * 100)) : 0);
 
@@ -369,6 +442,9 @@ export function SettingsPage() {
               options={languageOptions}
               onChange={(v) => set((d) => void (d.language = v))}
             />
+          </Row>
+          <Row label="Languages in the overlay menu">
+            <LanguageFilter shown={settings.shownLanguages ?? []} onChange={(v) => set((d) => void (d.shownLanguages = v))} />
           </Row>
           <Row label="Microphone">
 <SearchSelect
