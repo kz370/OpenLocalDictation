@@ -370,6 +370,8 @@ impl SessionCtx {
         let mut backlog = (!backlog.is_empty()).then_some(CaptureEvent::Samples(backlog));
         let started = Instant::now();
         let mut buffer: Vec<f32> = Vec::new(); // audio not yet covered by a finished utterance
+                                               // Stream position (samples) of buffer[0], to cut finished utterances off exactly.
+        let mut buffer_base = 0u64;
         let mut pending: Vec<f32> = Vec::new(); // the VAD needs fixed-size windows
         let mut committed = String::new();
         let mut samples_seen = 0u64;
@@ -424,17 +426,25 @@ impl SessionCtx {
                         }
                         pending.drain(..offset);
                         while !vad.is_empty() {
-                            let segment = vad.front().map(|s| s.samples().to_vec());
+                            let segment = vad
+                                .front()
+                                .map(|s| (s.start() as i64, s.samples().to_vec()));
                             vad.pop();
-                            let Some(segment) = segment else { continue };
+                            let Some((start, segment)) = segment else {
+                                continue;
+                            };
                             if (segment.len() as u64) * 1000 / 16_000 < super::MIN_AUDIO_MS {
                                 continue;
                             }
-                            // Utterance finished: drop its audio from the buffer so
-                            // it is not transcribed twice; its text shows up live
-                            // once the worker has it.
-                            let consumed = (segment.len() + 16_000 / 2).min(buffer.len());
-                            buffer.drain(..consumed);
+                            // Utterance finished: drop everything up to its end from
+                            // the buffer (by stream position, so a long pause before
+                            // it cannot leave its tail behind) so it is not
+                            // transcribed twice; its text shows up live once the
+                            // worker has it.
+                            let end = start.max(0) as u64 + segment.len() as u64;
+                            let consumed = end.saturating_sub(buffer_base).min(buffer.len() as u64);
+                            buffer.drain(..consumed as usize);
+                            buffer_base += consumed;
                             let _ = seg_tx.send(segment);
                         }
                     }

@@ -8,11 +8,12 @@ export function Switch(props: { checked: boolean; onChange: (v: boolean) => void
   );
 }
 
-export function Segmented<T extends string>(props: { value: T; options: { value: T; label: string; disabled?: boolean }[]; onChange: (v: T) => void; label: string }) {
+export function Segmented<T extends string>(props: { value: T; options: { value: T; label: string; icon?: ReactNode; disabled?: boolean }[]; onChange: (v: T) => void; label: string }) {
   return (
     <div className="segmented" role="radiogroup" aria-label={props.label}>
       {props.options.map((o) => (
         <button key={o.value} type="button" role="radio" aria-checked={props.value === o.value} disabled={o.disabled} onClick={() => props.onChange(o.value)}>
+          {o.icon}
           {o.label}
         </button>
       ))}

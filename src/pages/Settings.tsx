@@ -1,6 +1,43 @@
-import { Fragment, useCallback, useEffect, useMemo, useState } from "react";
+import { Fragment, useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import { open as pickFolder } from "@tauri-apps/plugin-dialog";
-import { Cpu, Download, FolderOpen, Minus, RotateCcw, RotateCw, X, Zap } from "lucide-react";
+import {
+  Brain,
+  Check,
+  ClipboardPaste,
+  Cpu,
+  Download,
+  Droplets,
+  FileText,
+  FolderOpen,
+  Keyboard,
+  Languages,
+  ListFilter,
+  Lock,
+  LockKeyhole,
+  Maximize2,
+  Mic,
+  Minus,
+  Monitor,
+  Moon,
+  MousePointerClick,
+  Move,
+  MoveHorizontal,
+  Palette,
+  Pencil,
+  PenLine,
+  PictureInPicture2,
+  Pin,
+  Power,
+  RotateCcw,
+  RotateCw,
+  Settings as SettingsIcon,
+  SlidersHorizontal,
+  Space,
+  Sun,
+  Type,
+  X,
+  Zap,
+} from "lucide-react";
 import { ipc, on, toAppError } from "../ipc";
 import { KNOWN_LANGUAGES } from "../knownLanguages";
 import { useSettings } from "../settingsStore";
@@ -45,7 +82,7 @@ function LanguageFilter({ shown, onChange }: { shown: string[]; onChange: (v: st
       />
       {!all && (
         <button className="btn btn-sm" onClick={edit}>
-          Edit…
+          <Pencil size={13} /> Edit…
         </button>
       )}
       {open && (
@@ -55,7 +92,7 @@ function LanguageFilter({ shown, onChange }: { shown: string[]; onChange: (v: st
           actions={
             <>
               <button className="btn" onClick={() => setOpen(false)}>
-                Cancel
+                <X size={13} /> Cancel
               </button>
               <button
                 className="btn btn-primary"
@@ -65,7 +102,7 @@ function LanguageFilter({ shown, onChange }: { shown: string[]; onChange: (v: st
                   setOpen(false);
                 }}
               >
-                Save
+                <Check size={13} /> Save
               </button>
             </>
           }
@@ -145,14 +182,19 @@ function ModelCard({ settings, update }: { settings: Settings; update: (m: (d: S
     if (typeof picked === "string") await changeFolder(picked);
   };
   return (
-    <Card title="Speech model">
+    <Card title="Speech model" icon={<Brain size={16} />}>
       <p className="row-hint" style={{ margin: "10px 0 4px" }}>
         Whisper runs on this PC; your voice never leaves it. Point the app at a folder that already holds your models, or download them here (checked with SHA-256).
       </p>
       <div className="folder-block">
-        <div className="row-label">
-          Models folder
-          <span className="row-hint">Models in this folder, or in its stt sub-folder, are found automatically, so other apps can share them. Nothing is moved or copied.</span>
+        <div className="row-label has-icon">
+          <span className="row-icon" aria-hidden>
+            <FolderOpen size={16} />
+          </span>
+          <span className="row-label-text">
+            Models folder
+            <span className="row-hint">Models in this folder, or in its stt sub-folder, are found automatically, so other apps can share them. Nothing is moved or copied.</span>
+          </span>
         </div>
         <code className="mono folder-path" title={info?.modelsDir}>
           {info?.modelsDir ?? "…"}
@@ -198,7 +240,7 @@ function ModelCard({ settings, update }: { settings: Settings; update: (m: (d: S
                 <span />
               ) : busy ? (
                 <button className="btn btn-sm" onClick={() => void ipc.modelsCancel(m.id)}>
-                  Cancel
+                  <X size={13} /> Cancel
                 </button>
               ) : (
                 <button className="btn btn-sm btn-primary" onClick={() => void download(m.id)}>
@@ -209,7 +251,7 @@ function ModelCard({ settings, update }: { settings: Settings; update: (m: (d: S
           );
         })}
       </div>
-      {error && <ErrorNotice error={error} actions={<button className="btn btn-sm" onClick={() => setError(null)}>Dismiss</button>} />}
+      {error && <ErrorNotice error={error} actions={<button className="btn btn-sm" onClick={() => setError(null)}><X size={13} /> Dismiss</button>} />}
       {confirmDefault && (
         <Dialog
           title="Use the app's own models folder?"
@@ -217,7 +259,7 @@ function ModelCard({ settings, update }: { settings: Settings; update: (m: (d: S
           actions={
             <>
               <button className="btn" onClick={() => setConfirmDefault(false)}>
-                Cancel
+                <X size={13} /> Cancel
               </button>
               <button
                 className="btn btn-primary"
@@ -267,14 +309,14 @@ function ProcessingCard({ settings }: { settings: Settings }) {
   };
 
   return (
-    <Card title="Processing">
-      <Row label="Run speech recognition on" hint={status?.supported ? undefined : "No NVIDIA graphics card was found, so only the CPU is available."}>
+    <Card title="Processing" icon={<Cpu size={16} />}>
+      <Row label="Run speech recognition on" icon={<Cpu size={16} />} hint={status?.supported ? undefined : "No NVIDIA graphics card was found, so only the CPU is available."}>
         <Segmented
           label="Device"
           value={wantGpu && status?.supported ? "gpu" : "cpu"}
           options={[
-            { value: "cpu", label: "CPU" },
-            { value: "gpu", label: "GPU (NVIDIA)", disabled: !status?.supported },
+            { value: "cpu", label: "CPU", icon: <Cpu size={13} /> },
+            { value: "gpu", label: "GPU (NVIDIA)", icon: <Zap size={13} />, disabled: !status?.supported },
           ]}
           onChange={(v) => void act(() => ipc.gpuSetEnabled(v === "gpu"))}
         />
@@ -299,7 +341,7 @@ function ProcessingCard({ settings }: { settings: Settings }) {
           </span>
           {busy ? (
             <button className="btn btn-sm" onClick={() => void ipc.gpuCancel()}>
-              Cancel
+              <X size={13} /> Cancel
             </button>
           ) : (
             <button className="btn btn-sm btn-primary" onClick={() => void act(() => ipc.gpuInstall())}>
@@ -326,22 +368,22 @@ function ProcessingCard({ settings }: { settings: Settings }) {
         </div>
       )}
       {status?.installed && (
-        <Row label="CUDA libraries" hint={`Installed, ${formatBytes(status.sizeBytes)}`} end>
+        <Row label="CUDA libraries" icon={<Zap size={16} />} hint={`Installed, ${formatBytes(status.sizeBytes)}`} end>
           <span className="badge ok">Installed</span>
         </Row>
       )}
-      {error && <ErrorNotice error={error} actions={<button className="btn btn-sm" onClick={() => setError(null)}>Dismiss</button>} />}
+      {error && <ErrorNotice error={error} actions={<button className="btn btn-sm" onClick={() => setError(null)}><X size={13} /> Dismiss</button>} />}
     </Card>
   );
 }
 
 type Tab = "model" | "processing" | "dictation" | "overlay" | "app";
-const TABS: { id: Tab; label: string }[] = [
-  { id: "model", label: "Speech model" },
-  { id: "processing", label: "Processing" },
-  { id: "dictation", label: "Dictation" },
-  { id: "overlay", label: "Overlay" },
-  { id: "app", label: "App" },
+const TABS: { id: Tab; label: string; icon: ReactNode }[] = [
+  { id: "model", label: "Speech model", icon: <Brain size={15} /> },
+  { id: "processing", label: "Processing", icon: <Cpu size={15} /> },
+  { id: "dictation", label: "Dictation", icon: <Mic size={15} /> },
+  { id: "overlay", label: "Overlay", icon: <PictureInPicture2 size={15} /> },
+  { id: "app", label: "App", icon: <SlidersHorizontal size={15} /> },
 ];
 
 export function SettingsPage() {
@@ -410,6 +452,7 @@ export function SettingsPage() {
         <div className="tabs" role="tablist" aria-label="Settings sections">
           {TABS.map((t) => (
             <button key={t.id} type="button" role="tab" id={`tab-${t.id}`} aria-selected={tab === t.id} aria-controls={`panel-${t.id}`} className="tab" onClick={() => setTab(t.id)}>
+              {t.icon}
               {t.label}
             </button>
           ))}
@@ -420,11 +463,11 @@ export function SettingsPage() {
         {tab === "processing" && <ProcessingCard settings={settings} />}
 
         {tab === "dictation" && (
-        <Card title="Dictation">
-          <Row label="Shortcut">
+        <Card title="Dictation" icon={<Mic size={16} />}>
+          <Row label="Shortcut" icon={<Keyboard size={16} />}>
             <ShortcutInput label="Dictation shortcut" value={settings.shortcut} defaultValue="CommandOrControl+Alt+Space" onChange={(v) => set((d) => void (d.shortcut = v))} />
           </Row>
-          <Row label="Shortcut behavior">
+          <Row label="Shortcut behavior" icon={<MousePointerClick size={16} />}>
             <Segmented
               label="Shortcut behavior"
               value={settings.mode}
@@ -435,7 +478,7 @@ export function SettingsPage() {
               onChange={(v) => set((d) => void (d.mode = v))}
             />
           </Row>
-          <Row label="Language" hint={settings.shownLanguages?.length ? "Only your chosen languages are listed. Change them below." : "You can also change it in the overlay while dictating."}>
+          <Row label="Language" icon={<Languages size={16} />} hint={settings.shownLanguages?.length ? "Only your chosen languages are listed. Change them below." : "You can also change it in the overlay while dictating."}>
 <SearchSelect
               label="Language"
               placeholder="Search languages…"
@@ -444,10 +487,10 @@ export function SettingsPage() {
               onChange={(v) => set((d) => void (d.language = v))}
             />
           </Row>
-          <Row label="Languages in the overlay menu">
+          <Row label="Languages in the overlay menu" icon={<ListFilter size={16} />}>
             <LanguageFilter shown={settings.shownLanguages ?? []} onChange={(v) => set((d) => void (d.shownLanguages = v))} />
           </Row>
-          <Row label="Microphone">
+          <Row label="Microphone" icon={<Mic size={16} />}>
 <SearchSelect
               label="Microphone"
               placeholder="Search microphones…"
@@ -456,32 +499,32 @@ export function SettingsPage() {
               onChange={(v) => set((d) => void (d.microphone = v || null))}
             />
           </Row>
-          <Row label="Review before inserting" hint="Opens the text in the overlay so you can edit it, then Ctrl+Enter inserts it. Off: words are typed live as you speak." htmlFor="sw-review">
+          <Row label="Review before inserting" icon={<PenLine size={16} />} hint="Opens the text in the overlay so you can edit it, then Ctrl+Enter inserts it. Off: words are typed live as you speak." htmlFor="sw-review">
             <Switch id="sw-review" label="Review before inserting" checked={settings.reviewBeforeInsert} onChange={(v) => set((d) => void (d.reviewBeforeInsert = v))} />
           </Row>
-          <Row label="Insert by">
+          <Row label="Insert by" icon={<Type size={16} />}>
             <Segmented
               label="Insert by"
               value={settings.insertMethod}
               options={[
-                { value: "type", label: "Typing" },
-                { value: "paste", label: "Pasting" },
+                { value: "type", label: "Typing", icon: <Keyboard size={13} /> },
+                { value: "paste", label: "Pasting", icon: <ClipboardPaste size={13} /> },
               ]}
               onChange={(v) => set((d) => void (d.insertMethod = v))}
             />
           </Row>
-          <Row label="Add a space after the text" htmlFor="sw-space">
+          <Row label="Add a space after the text" icon={<Space size={16} />} htmlFor="sw-space">
             <Switch id="sw-space" label="Add a space after the text" checked={settings.addTrailingSpace} onChange={(v) => set((d) => void (d.addTrailingSpace = v))} />
           </Row>
         </Card>
         )}
 
         {tab === "overlay" && (
-        <Card title="Overlay">
-          <Row label="Pin the overlay" hint="Keeps the overlay on screen, always on top of other apps. It listens to nothing until you press the shortcut or its mic button." htmlFor="sw-pin">
+        <Card title="Overlay" icon={<PictureInPicture2 size={16} />}>
+          <Row label="Pin the overlay" icon={<Pin size={16} />} hint="Keeps the overlay on screen, always on top of other apps. It listens to nothing until you press the shortcut or its mic button." htmlFor="sw-pin">
             <Switch id="sw-pin" label="Pin the overlay" checked={settings.overlayPinned} onChange={(v) => void ipc.overlaySetPinned(v)} />
           </Row>
-          <Row label="Overlay size" hint="Small is a compact pill: what you say shows above it and review edits there too. With both, a button in the overlay switches between them.">
+          <Row label="Overlay size" icon={<Maximize2 size={16} />} hint="Small is a compact pill: what you say shows above it and review edits there too. With both, a button in the overlay switches between them.">
             <Segmented
               label="Overlay size"
               value={settings.overlayLayouts}
@@ -493,10 +536,10 @@ export function SettingsPage() {
               onChange={(v) => set((d) => void (d.overlayLayouts = v))}
             />
           </Row>
-          <Row label="Settings button" hint="Shows a gear in the overlay that opens these settings." htmlFor="sw-gear">
+          <Row label="Settings button" icon={<SettingsIcon size={16} />} hint="Shows a gear in the overlay that opens these settings." htmlFor="sw-gear">
             <Switch id="sw-gear" label="Settings button" checked={settings.overlayShowSettings} onChange={(v) => set((d) => void (d.overlayShowSettings = v))} />
           </Row>
-          <Row label="Overlay opacity" hint="Makes the overlay background see-through. Text and buttons stay solid.">
+          <Row label="Overlay opacity" icon={<Droplets size={16} />} hint="Makes the overlay background see-through. Text and buttons stay solid.">
             <div style={{ display: "flex", alignItems: "center", gap: 10, width: 220 }}>
               <input
                 type="range"
@@ -510,16 +553,16 @@ export function SettingsPage() {
               <span style={{ width: 40, textAlign: "right", fontVariantNumeric: "tabular-nums" }}>{settings.overlayOpacity}%</span>
             </div>
           </Row>
-          <Row label="Lock the small overlay's size" hint="Off: drag the right edge of the small overlay to change its width (double-click the edge to reset it)." htmlFor="sw-lock">
+          <Row label="Lock the small overlay's size" icon={<Lock size={16} />} hint="Off: drag the right edge of the small overlay to change its width (double-click the edge to reset it)." htmlFor="sw-lock">
             <Switch id="sw-lock" label="Lock the small overlay's size" checked={settings.overlaySizeLocked} onChange={(v) => set((d) => void (d.overlaySizeLocked = v))} />
           </Row>
-          <Row label="Move sideways only" hint="The overlay slides left and right and stays just above the taskbar." htmlFor="sw-side">
+          <Row label="Move sideways only" icon={<MoveHorizontal size={16} />} hint="The overlay slides left and right and stays just above the taskbar." htmlFor="sw-side">
             <Switch id="sw-side" label="Move sideways only" checked={settings.overlayHorizontalOnly} onChange={(v) => set((d) => void (d.overlayHorizontalOnly = v))} />
           </Row>
-          <Row label="Lock the overlay position" hint="Stops the overlay from being dragged." htmlFor="sw-poslock">
+          <Row label="Lock the overlay position" icon={<LockKeyhole size={16} />} hint="Stops the overlay from being dragged." htmlFor="sw-poslock">
             <Switch id="sw-poslock" label="Lock the overlay position" checked={settings.overlayPositionLocked} onChange={(v) => set((d) => void (d.overlayPositionLocked = v))} />
           </Row>
-          <Row label="Overlay position" hint="Drag the overlay by its header to move it (unless the position is locked).">
+          <Row label="Overlay position" icon={<Move size={16} />} hint="Drag the overlay by its header to move it (unless the position is locked).">
             <button className="btn btn-sm" onClick={() => setConfirmPosition(true)}>
               <RotateCcw size={13} /> Reset position
             </button>
@@ -530,7 +573,7 @@ export function SettingsPage() {
                 actions={
                   <>
                     <button className="btn" onClick={() => setConfirmPosition(false)}>
-                      Cancel
+                      <X size={13} /> Cancel
                     </button>
                     <button
                       className="btn btn-primary"
@@ -552,23 +595,23 @@ export function SettingsPage() {
         )}
 
         {tab === "app" && (
-        <Card title="App">
-          <Row label="Start with Windows" htmlFor="sw-start">
+        <Card title="App" icon={<SlidersHorizontal size={16} />}>
+          <Row label="Start with Windows" icon={<Power size={16} />} htmlFor="sw-start">
             <Switch id="sw-start" label="Start with Windows" checked={settings.startWithOs} onChange={(v) => set((d) => void (d.startWithOs = v))} />
           </Row>
-          <Row label="Theme">
+          <Row label="Theme" icon={<Palette size={16} />}>
             <Segmented
               label="Theme"
               value={settings.theme}
               options={[
-                { value: "system", label: "System" },
-                { value: "light", label: "Light" },
-                { value: "dark", label: "Dark" },
+                { value: "system", label: "System", icon: <Monitor size={13} /> },
+                { value: "light", label: "Light", icon: <Sun size={13} /> },
+                { value: "dark", label: "Dark", icon: <Moon size={13} /> },
               ]}
               onChange={(v) => set((d) => void (d.theme = v))}
             />
           </Row>
-          <Row label="Logs" hint={info ? `Version ${info.version}. Logs never contain what you dictate.` : undefined} end>
+          <Row label="Logs" icon={<FileText size={16} />} hint={info ? `Version ${info.version}. Logs never contain what you dictate.` : undefined} end>
             <button className="btn btn-sm" onClick={() => void ipc.openLogs()}>
               <FolderOpen size={13} /> Open logs
             </button>

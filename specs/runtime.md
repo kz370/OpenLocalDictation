@@ -45,3 +45,9 @@ Files Processed: 65 — COMPLETE
 - [2026-11-27T01:20:00Z] Overlay header gear button (settings_open) in both layouts; overlayShowSettings option hides it.
 - [2026-11-27T01:40:00Z] Settings title bar and header brand mark now show the app icon (public/app-icon.png) instead of a drawn mic glyph.
 - [2026-11-27T02:00:00Z] Overlay position options: overlayHorizontalOnly (default on) and overlayPositionLocked, in Settings > Overlay.
+- [2026-11-27T02:20:00Z] Settings: the main area scrolls when a tab is taller than the window (Overlay tab grew), so nothing is clipped.
+- [2026-11-27T02:40:00Z] Scrollbars: thinner (8px, 4px thumb), themed colours; removed scrollbar-width on the settings area, which had switched the themed ::-webkit-scrollbar rules off.
+- [2026-11-27T03:00:00Z] Settings: only the rows of a card scroll (.card-body); title, tabs, banners and the card heading are fixed.
+- [2026-11-27T03:20:00Z] Settings card: clipped to its rounded corners and scrollbar track inset, so the scrollbar no longer pokes out at the corner.
+- [2026-11-27T03:40:00Z] Settings window height 640 -> 656 and less bottom padding: the Speech model tab scrolled although it fits (a card only scrolls when its rows really overflow).
+- [2026-11-27T04:00:00Z] Fix: dictated text appeared twice (tail buffer kept part of an already-transcribed utterance after a long leading pause); finished utterances are now cut off by stream position. Settings: icons on tabs, card headings, rows, segmented options and buttons.

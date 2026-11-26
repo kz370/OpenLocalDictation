@@ -1103,8 +1103,49 @@ html[data-route="settings"] body {
 .settings-main {
   flex: 1;
   min-height: 0;
-  padding: 14px 24px 16px;
+  padding: 14px 24px 10px;
+  display: flex;
+  flex-direction: column;
   overflow: hidden;
+}
+
+/* Only the rows of a settings card scroll. The title, tabs, banners and the
+   card heading stay put, so a tab taller than the window never clips. */
+.settings-main > * {
+  flex: none;
+}
+
+.settings-main > [role="tabpanel"] {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.settings-main .card {
+  display: flex;
+  flex-direction: column;
+  flex: 0 1 auto;
+  min-height: 0;
+}
+
+.settings-main .card-head {
+  flex: none;
+}
+
+.settings-main .card {
+  overflow: hidden; /* the scroll area follows the card's rounded corners */
+}
+
+.settings-main .card-body {
+  min-height: 0;
+  overflow-y: auto;
+  border-radius: 0 0 15px 15px;
+}
+
+/* Keep the scrollbar clear of the card's corners. */
+.settings-main .card-body::-webkit-scrollbar-track {
+  margin-block: 8px;
 }
 
 .brand {
@@ -1178,4 +1219,48 @@ html[data-route="settings"] body {
   line-height: 1.35;
   pointer-events: none;
   user-select: none;
+}
+
+/* ---------- Settings icons ---------- */
+.row-label.has-icon {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+}
+
+.row-icon,
+.card-icon {
+  display: grid;
+  place-items: center;
+  flex: none;
+  color: var(--accent);
+}
+
+.row-icon {
+  width: 18px;
+  height: 18px;
+  margin-top: 1px;
+}
+
+.row-label-text {
+  min-width: 0;
+}
+
+.card-head h2 {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.segmented button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
 }

@@ -55,7 +55,7 @@ The overlay's language pill (and Settings → Dictation → Language) selects Au
 * Crash guard: if a GPU start dies before a model loads, the next launch switches `device` to `cpu`.
 
 ### 2.8 Settings window
-Frameless, fixed 780 x 640, no resize or maximize; own title bar (app icon, minimize, close-to-tray). The title bar and the header brand mark show the real app icon (`public/app-icon.png`, a copy of `src-tauri/icons/128x128.png`; replace it whenever the app icon changes). Tabs: **Speech model** (folder + models), **Processing**, **Dictation** (shortcut, behaviour, language, microphone, review, insert method, trailing space, overlay position), **App** (start with Windows, theme, logs). The page never scrolls, and the model list is shown in full (the window height covers it). Every Reset button has an icon and asks first through the themed `Dialog`.
+Frameless, fixed 780 x 656, no resize or maximize (when a tab is taller than the window only the rows of its card scroll; the title, tabs and card heading stay fixed); own title bar (app icon, minimize, close-to-tray). The title bar and the header brand mark show the real app icon (`public/app-icon.png`, a copy of `src-tauri/icons/128x128.png`; replace it whenever the app icon changes). Tabs: **Speech model** (folder + models), **Processing**, **Dictation** (shortcut, behaviour, language, microphone, review, insert method, trailing space, overlay position), **App** (start with Windows, theme, logs). The page never scrolls, and the model list is shown in full (the window height covers it). Every Reset button has an icon and asks first through the themed `Dialog`.
 
 ### 2.9 Tray
 Left click opens the idle dictation window. Menu: Show dictation window (opens the idle overlay; nothing is recorded until the shortcut or the mic button), Settings, Quit. A second launch opens settings.
@@ -109,3 +109,7 @@ Pressing the dictation shortcut while the last take is still transcribing (`Voic
 ### Resizable small overlay and tooltips
 
 The small pill has a drag handle on its right edge (width only, 320-800 px, double-click resets to 400). `overlay_resize` resizes the window live and saves the width on release; `overlaySizeLocked` (Settings, Overlay tab) removes the handle. Tooltips are themed: `src/components/Tooltip.tsx` (`TooltipLayer`, mounted once per window in `main.tsx`) replaces the native `title` tooltip by moving the text to `data-tip` while hovered and drawing a `.tooltip` using the theme tokens. In the overlay window the tooltip's rectangle is added to the window region through `dictation_overlay_tip`, so it can sit outside the card.
+
+### Settings icons and duplicate-text fix
+
+Tabs, card headings, setting rows (`Row icon`), segmented options and Cancel/Save/Edit/Dismiss buttons carry lucide icons (`Card icon`, `Segmented option icon`). In `stt/session.rs` the audio of a finished utterance is now cut from the tail buffer by its stream position (`SpeechSegment::start` + length, tracked against `buffer_base`), not by a length guess: with a long pause before speaking, part of the utterance used to stay in the buffer and was transcribed a second time when recording stopped, so the text appeared twice.
