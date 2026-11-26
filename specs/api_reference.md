@@ -44,7 +44,7 @@ There is **no** command that removes the CUDA libraries.
 | Command | Args | Returns | Notes |
 |---|---|---|---|
 | `dictation_cancel` | — | `()` | Esc / X: discards review, drops recorded audio, sets the cancel flag, hides the overlay. |
-| `dictation_insert_now` | `text: string` | `()` | Stops listening. With review on, opens the editor first (`dictation://state` `reviewing`). |
+| `dictation_insert_now` | `text: string` | `()` | Stops listening. With review on and some text heard, opens the editor first (`dictation://state` `reviewing`); with no text no editor opens. An empty final transcript closes any editor opened that way and shows `empty`. |
 | `dictation_confirm` | `text: string` | `()` | Inserts the edited text: shrinks the overlay, restores focus to the target window, waits 150 ms, types/pastes. |
 | `dictation_retry` | — | `()` | Throws the take away (retracting live-typed text) and listens again. |
 | `dictation_set_language` | `language: string` | `()` | Saves `language`; emits `settings://changed`. |

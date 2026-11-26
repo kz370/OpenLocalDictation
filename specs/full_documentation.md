@@ -88,6 +88,7 @@ Daily rolling log in the Tauri log dir, filter via `LOCAL_DICTATION_LOG` (defaul
 * One take at a time (`dictation_busy`, session numbers); a new take cannot start during review or transcription.
 * Cancel always wins over a pending transcript (`dictation_cancel` consumed by `run_dictation`).
 * Review and live typing are mutually exclusive: with review on, `partial` events type nothing.
+* A transcript with no text never shows an edit window: `dictation_insert_now` skips the live preview when nothing was heard, and `run_dictation` closes a preview (and returns focus) when the final text turns out empty, then shows `empty`.
 * A late `idle` of an old session never ends a newer one in the UI (session numbering, overlay ignores `idle` while previewing/reviewing).
 * The overlay never hides while a take is active or busy (`overlay_hide_is_current_and_idle`).
 

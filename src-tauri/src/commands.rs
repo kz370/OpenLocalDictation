@@ -424,11 +424,13 @@ pub fn dictation_cancel(app: AppHandle) {
     window::cancel_dictation(&app);
 }
 
-/// Stops listening; review mode opens a live preview while final transcription runs.
+/// Stops listening; review mode opens a live preview while final transcription
+/// runs, but only when something was heard: with no text there is nothing to
+/// edit, so the editor is not shown (the "nothing heard" message follows).
 #[tauri::command]
 pub fn dictation_insert_now(app: AppHandle, state: State<'_, AppState>, text: String) {
     if state.voice.is_active() {
-        if state.settings.get().review_before_insert {
+        if state.settings.get().review_before_insert && !text.trim().is_empty() {
             window::set_overlay_review(&app, true);
             let _ = app.emit(
                 "dictation://state",

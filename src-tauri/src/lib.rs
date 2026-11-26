@@ -189,6 +189,10 @@ async fn run_dictation(app: AppHandle, raw: String) {
 
     let linger = if raw.is_empty() {
         retract_live_typed(&app).await;
+        // A live preview may have opened the editor (and taken focus) on text
+        // that turned out empty: close it and hand focus back.
+        window::set_overlay_review(&app, false);
+        window::restore_target(&app);
         let _ = app.emit("dictation://state", serde_json::json!({ "state": "empty" }));
         LINGER_MSG_MS
     } else if state.settings.get().review_before_insert {

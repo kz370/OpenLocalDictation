@@ -442,6 +442,8 @@ export function Overlay() {
           draftDirty.current = false;
           setReviewPreview(false);
         }
+        // The preview only opens on text; an empty one never shows an editor.
+        if (e.state === "reviewing" && !(e.text ?? "").trim()) return;
         if (e.state === "reviewing") {
           previewRef.current = true;
           draftDirty.current = false;
