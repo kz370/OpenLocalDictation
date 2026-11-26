@@ -9,7 +9,7 @@ This file governs all human and AI contributors. It takes precedence over model 
 - Any code change MUST update the matching `specs/` files in the same commit / pull request:
   - Rust (`src-tauri/src/`): `specs/full_documentation.md`, `specs/catalog.txt`, `specs/relationships.txt`, `specs/data_models.txt` (if types change), `specs/api_reference.md` (if a command or event changes), `specs/architecture_overview.md` (if layers change) and the relevant `specs/diagrams/*.mmd`.
   - UI (`src/`): `specs/full_documentation.md`, `specs/catalog.txt`, `specs/relationships.txt`, `specs/api_reference.md` (if IPC use changes).
-  - Config / manifests / build scripts (`tauri.conf.json`, `Cargo.toml`, `build.bat`, `local-dictation.iss`, capabilities): `specs/developer_guide.md` and `specs/full_documentation.md`.
+  - Config / manifests / build scripts (`tauri.conf.json`, `Cargo.toml`, `scripts/*.bat`, `scripts/*.ps1`, `local-dictation.iss`, capabilities): `specs/developer_guide.md` and `specs/full_documentation.md`.
 - If no spec update is needed, say why in the commit message or PR description (for example "typo only, no behaviour change").
 - A change with behaviour and no spec update MUST be rejected in review.
 - After updating specs, append a line to `specs/runtime.md` under `## Log`.

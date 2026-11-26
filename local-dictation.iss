@@ -1,5 +1,5 @@
 ; Open Local Dictation - Inno Setup script (all users, C:\Program Files)
-; Built by build.bat, which passes /DAppVersion /DSourceExe /DLibDir /DOutputDir.
+; Built by scripts\build.bat, which passes /DAppVersion /DSourceExe /DLibDir /DOutputDir.
 
 #define AppName "Open Local Dictation"
 

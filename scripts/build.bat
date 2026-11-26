@@ -7,7 +7,8 @@ rem  Output: release\v<version>\
 rem
 rem  Needs: Rust (MSVC toolchain) and Node.js. Builds use half the CPU threads.
 rem ---------------------------------------------------------------------------
-set "ROOT=%~dp0"
+rem This script lives in scripts; the repository root is one level up.
+for %%I in ("%~dp0..") do set "ROOT=%%~fI\"
 for /f "tokens=2 delims== " %%v in ('findstr /b /c:"version" "%ROOT%src-tauri\Cargo.toml"') do if not defined VERSION set "VERSION=%%~v"
 set "DIST=%ROOT%release\v%VERSION%"
 set "TARGET=%ROOT%src-tauri\target\release"

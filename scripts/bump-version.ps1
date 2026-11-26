@@ -10,15 +10,15 @@
   and appends a line to specs/runtime.md.
 
   The notes are also copied to release/v<version>/RELEASE_NOTES.md the next
-  time build.bat runs (it copies release-notes/v<version>.md when present).
+  time scripts\build.bat runs (it copies release-notes/v<version>.md when present).
 
 .EXAMPLE
-  .\bump-version.ps1 patch          # 0.1.0 -> 0.1.1
-  .\bump-version.ps1 minor          # 0.1.0 -> 0.2.0
-  .\bump-version.ps1 major          # 0.1.0 -> 1.0.0
-  .\bump-version.ps1 1.4.2          # exact version
-  .\bump-version.ps1 patch -DryRun  # show what would change, touch nothing
-  .\bump-version.ps1 0.1.0          # the current version: only rewrite its release notes
+  .\scripts\bump-version.ps1 patch          # 0.1.0 -> 0.1.1
+  .\scripts\bump-version.ps1 minor          # 0.1.0 -> 0.2.0
+  .\scripts\bump-version.ps1 major          # 0.1.0 -> 1.0.0
+  .\scripts\bump-version.ps1 1.4.2          # exact version
+  .\scripts\bump-version.ps1 patch -DryRun  # show what would change, touch nothing
+  .\scripts\bump-version.ps1 0.1.0          # the current version: only rewrite its release notes
 #>
 param(
   [Parameter(Mandatory = $true, Position = 0)]
@@ -28,7 +28,7 @@ param(
 )
 
 $ErrorActionPreference = "Stop"
-$root = $PSScriptRoot
+$root = Split-Path -Parent $PSScriptRoot   # this script lives in scripts\
 Set-Location $root
 
 function Read-Text($path) { [System.IO.File]::ReadAllText((Join-Path $root $path)) }
@@ -141,5 +141,5 @@ if (-not $notesOnly) {
 }
 
 Write-Host ""
-Write-Host "Done. Next: review the diff and release-notes\v$new.md, commit ('chore: release v$new'), run build.bat, then publish with:"
+Write-Host "Done. Next: review the diff and release-notes\v$new.md, commit ('chore: release v$new'), run scripts\build.bat, then publish with:"
 Write-Host "  gh release create v$new release\v$new\*.exe release\v$new\*.zip --title 'v$new' --notes-file release-notes\v$new.md"

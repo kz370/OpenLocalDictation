@@ -83,7 +83,7 @@ src-tauri/Cargo.toml           :: crate local-dictation; sherpa-onnx "shared" li
 src-tauri/tauri.conf.json      :: productName "Open Local Dictation", identifier com.localdictation.app, no windows declared (created in code), NSIS target, CSP.
 src-tauri/capabilities/default.json :: core:default, set-position, start-dragging, minimize, dialog:allow-open, global-shortcut:default for windows settings + overlay.
 src-tauri/build.rs             :: tauri_build + rerun on ../dist change.
-build.bat                      :: frontend build, cargo release build, portable folder, Inno Setup installer; output release\v<version>\.
+scripts/build.bat              :: frontend build, cargo release build, portable folder, Inno Setup installer; output release\v<version>\.
 local-dictation.iss            :: Inno Setup script (exe + four speech DLLs).
 vite.config.ts / tsconfig.json / package.json :: Vite dev server on 127.0.0.1:1430, strict TypeScript.
 AGENTS.md                      :: contributor rules, specs-sync mandate.
