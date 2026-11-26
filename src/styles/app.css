@@ -782,7 +782,7 @@ html.overlay {
 }
 
 /* Hangs outside the card, in the window's invisible room above or below it;
-   placed inline (top/right/max-height) from the pill's position. Corners are
+   placed inline (top/left/max-height) from the chip, inside the window. Corners are
    concentric: rows round at the menu's radius minus its padding (16 - 5), so
    the highlight follows the menu's own curve. */
 .overlay-lang-menu {

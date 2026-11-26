@@ -64,3 +64,4 @@ Files Processed: 65 — COMPLETE
 - [2026-11-27T08:40:00Z] Bubble neck replaced by a chin (152 x 51): rounded joints, straight sides tangent to the circle, circle's lower half as its bottom; tinted halo on the mic.
 - [2026-11-27T08:50:00Z] Fix: the chin SVG no longer takes clicks (pointer-events: none); its box covered the mic once the pill showed, so the circle's mic did nothing.
 - [2026-11-27T09:00:00Z] Bubble chin removed: pill and circle are separate shapes with a 6 px gap (ORB_GAP 6); no masks or neck region shape.
+- [2026-11-27T09:20:00Z] Fix: language menu was cut off past the window's left edge when the chip sits on the left (bubble pill); it now aligns to the chip's outer side and stays inside the window.

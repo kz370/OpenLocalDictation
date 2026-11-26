@@ -191,6 +191,7 @@ const MENU_PAD = 12; // padding + border
 const MENU_MAX_ROWS = 6;
 const MENU_GAP = 6; // between the pill and the menu
 const MENU_W = 200; // matches .overlay-lang-menu
+const MENU_EDGE = 8; // least room between the menu and the window's edge (its shadow)
 const MENU_LEAVE_MS = 500; // grace before a pointer that left the overlay closes the menu
 
 /** The window has one menu rectangle (MENU_RECT in window.rs), so the pill
@@ -221,7 +222,7 @@ function PillMenu(props: {
   openRef?: React.MutableRefObject<(() => void) | null>;
   onOpenChange?: (open: boolean) => void;
 }) {
-  const [open, setOpen] = useState<{ top: number; right: number } | null>(null);
+  const [open, setOpen] = useState<{ top: number; left: number } | null>(null);
   const [query, setQuery] = useState("");
   const ref = useRef<HTMLDivElement>(null);
   const btnRef = useRef<HTMLButtonElement>(null);
@@ -255,12 +256,16 @@ function PillMenu(props: {
     const screenBottom = (scr.availTop ?? 0) + scr.availHeight;
     const down = window.screenY + r.bottom + MENU_GAP + menuH <= screenBottom;
     const top = down ? r.bottom + MENU_GAP : r.top - MENU_GAP - menuH;
-    const right = document.documentElement.clientWidth - r.right;
+    // Hang from the chip's outer side (left-aligned when the chip is on the
+    // window's left half, right-aligned otherwise), always inside the window.
+    const winW = document.documentElement.clientWidth;
+    const anchored = r.left + r.width / 2 < winW / 2 ? r.left : r.right - MENU_W;
+    const left = Math.max(MENU_EDGE, Math.min(anchored, winW - MENU_W - MENU_EDGE));
     // Unclip the menu's area first, so its first frame isn't cut off.
     menuOwner = owner.current;
-    await ipc.dictationOverlayMenu([r.right - MENU_W, top, MENU_W, menuH]).catch(quiet);
+    await ipc.dictationOverlayMenu([left, top, MENU_W, menuH]).catch(quiet);
     if (!openRef.current) return;
-    setOpen({ top, right });
+    setOpen({ top, left });
   };
 
   useEffect(() => {
@@ -316,7 +321,7 @@ function PillMenu(props: {
         <ChevronDown size={12} aria-hidden className="overlay-lang-chevron" />
       </button>
       {open && (
-        <div ref={menuRef} className="overlay-lang-menu" role="listbox" aria-label={props.label} style={{ top: open.top, right: open.right, maxHeight: menuH }}>
+        <div ref={menuRef} className="overlay-lang-menu" role="listbox" aria-label={props.label} style={{ top: open.top, left: open.left, maxHeight: menuH }}>
           {props.searchable && (
             <input
               className="input overlay-lang-search"
