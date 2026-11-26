@@ -1,0 +1,95 @@
+export interface AppErrorPayload {
+  code: string;
+  detail: string;
+}
+
+export interface Settings {
+  model: string;
+  modelsDir: string;
+  device: "gpu" | "cpu";
+  language: string;
+  microphone: string | null;
+  shortcut: string;
+  mode: "hold" | "toggle";
+  insertMethod: "type" | "paste";
+  addTrailingSpace: boolean;
+  reviewBeforeInsert: boolean;
+  startWithOs: boolean;
+  theme: "system" | "light" | "dark";
+  vadThreshold: number;
+  silenceMs: number;
+  autoStopSilenceSecs: number;
+  overlayX: number | null;
+  overlayY: number | null;
+}
+
+export interface AppInfo {
+  version: string;
+  paths: { dataDir: string; logsDir: string };
+  hasNvidia: boolean;
+  gpuName: string | null;
+  modelsDir: string;
+  defaultModelsDir: string;
+}
+
+export interface AudioDevice {
+  id: string;
+  name: string;
+  isDefault: boolean;
+}
+
+export interface ModelEntry {
+  id: string;
+  name: string;
+  blurb: string;
+  downloadBytes: number;
+  installed: boolean;
+  downloading: boolean;
+  custom: boolean;
+  path: string | null;
+}
+
+export interface DownloadProgress {
+  modelId: string;
+  state: "downloading" | "verifying" | "done" | "error" | "cancelled";
+  downloadedBytes: number;
+  totalBytes: number;
+  error: string | null;
+}
+
+export interface GpuStatus {
+  supported: boolean;
+  gpuName: string | null;
+  installed: boolean;
+  sizeBytes: number;
+  downloadBytes: number;
+  active: boolean;
+  restartRequired: boolean;
+  reusable: boolean;
+}
+
+export interface GpuProgress {
+  state: "downloading" | "extracting" | "done" | "error" | "cancelled";
+  downloadedBytes: number;
+  totalBytes: number;
+  error: string | null;
+}
+
+export type VoiceEvent =
+  | { type: "level"; value: number; bands: number[] }
+  | { type: "partial"; text: string }
+  | { type: "state"; session: number; state: string }
+  | { type: "transcript"; text: string; audioMs: number; elapsedMs: number }
+  | { type: "error"; code: string; detail: string };
+
+export interface DictationStateEvent {
+  state: "idle" | "listening" | "transcribing" | "correcting" | "reviewing" | "review" | "inserted" | "empty" | "cancelled" | "error";
+  text?: string;
+  targetApp?: string | null;
+  result?: { raw: string; inserted: string };
+  error?: AppErrorPayload;
+}
+
+export interface DictationTargetEvent {
+  targetApp: string | null;
+}

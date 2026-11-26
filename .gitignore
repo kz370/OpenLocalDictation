@@ -1,0 +1,18 @@
+# Dependencies and build output
+node_modules
+dist
+release/
+src-tauri/target/
+src-tauri/target-test/
+src-tauri/gen/schemas
+.build-cache/
+
+# Logs
+*.log
+npm-debug.log*
+
+# Editors
+.vscode/*
+!.vscode/extensions.json
+.idea
+.DS_Store

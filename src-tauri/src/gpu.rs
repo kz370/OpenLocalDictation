@@ -1,0 +1,823 @@
+//! Optional GPU (CUDA) acceleration for the local speech models.
+//!
+//! The app ships the CPU build of ONNX Runtime, because the CUDA build is
+//! ~570 MB and only useful on NVIDIA cards. Users who want it download a "GPU
+//! pack" into the app data folder.
+//!
+//! Windows resolves a program's imported DLLs from the folder the executable
+//! sits in, before `main` runs and before anything on `PATH`. So the pack
+//! cannot be loaded into the running process, and putting it on `PATH` would
+//! change nothing. Instead the executable is copied into the pack folder and
+//! restarted from there: its neighbours are then the CUDA libraries, and the
+//! same binary runs with the GPU build of sherpa-onnx.
+
+use crate::errors::{AppError, AppResult};
+use crate::hardware::HardwareInfo;
+use crate::models::extract_tar_bz2;
+use futures_util::StreamExt;
+use serde::Serialize;
+use std::io::Write;
+use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::Mutex;
+use std::time::{Duration, Instant};
+use tokio_util::sync::CancellationToken;
+
+/// Matches the `sherpa-onnx` crate version this app links against: the pack
+/// replaces those libraries, so the versions have to agree.
+pub const PACK_VERSION: &str = "1.13.8";
+const PACK_URL: &str = "https://github.com/k2-fsa/sherpa-onnx/releases/download/v1.13.8/sherpa-onnx-v1.13.8-cuda-12.x-cudnn-9.x-onnxruntime1.28.2-win-x64-cuda.tar.bz2";
+/// CUDA runtime libraries the ONNX Runtime CUDA provider imports. They come
+/// from NVIDIA's redistributable archives, so the user does not have to install
+/// the CUDA toolkit: without them the provider fails to load and takes the
+/// process down with it.
+/// The versions matter: ONNX Runtime 1.28 refuses libraries older than the
+/// CUDA 12.9 / cuDNN 9 ones it was built against ("procedure not found").
+const CUDA_PARTS: [Part; 3] = [
+    Part {
+        url: "https://developer.download.nvidia.com/compute/cuda/redist/cuda_cudart/windows-x86_64/cuda_cudart-windows-x86_64-12.9.79-archive.zip",
+        bytes: 3_521_238,
+        wanted: &["cudart64_12.dll"],
+    },
+    Part {
+        url: "https://developer.download.nvidia.com/compute/cuda/redist/libcublas/windows-x86_64/libcublas-windows-x86_64-12.9.1.4-archive.zip",
+        bytes: 549_755_186,
+        wanted: &["cublas64_12.dll", "cublasLt64_12.dll"],
+    },
+    // cuDNN is loaded on demand by the provider, for the convolutions in the
+    // voice models; every one of its parts has to be there.
+    Part {
+        url: "https://developer.download.nvidia.com/compute/cudnn/redist/cudnn/windows-x86_64/cudnn-windows-x86_64-9.14.0.64_cuda12-archive.zip",
+        bytes: 624_633_536,
+        wanted: &[
+            "cudnn64_9.dll",
+            "cudnn_graph64_9.dll",
+            "cudnn_ops64_9.dll",
+            "cudnn_cnn64_9.dll",
+            "cudnn_adv64_9.dll",
+            "cudnn_engines_precompiled64_9.dll",
+            "cudnn_engines_runtime_compiled64_9.dll",
+            "cudnn_heuristic64_9.dll",
+        ],
+    },
+];
+/// Rough download size of every part, for the progress bar.
+pub const PACK_BYTES: u64 = 595_017_373 + 3_521_238 + 549_755_186 + 624_633_536;
+
+/// One zipped NVIDIA archive and the libraries taken out of it.
+struct Part {
+    url: &'static str,
+    /// Download size, counted into `PACK_BYTES` for the progress bar.
+    #[allow(dead_code)]
+    bytes: u64,
+    wanted: &'static [&'static str],
+}
+/// Set on the relaunched process so it does not relaunch itself again.
+const RELAUNCH_MARKER: &str = "LOCAL_DICTATION_GPU_ACTIVE";
+/// Files that must be present for the pack to count as installed.
+const REQUIRED: [&str; 7] = [
+    "onnxruntime.dll",
+    "onnxruntime_providers_cuda.dll",
+    "sherpa-onnx-c-api.dll",
+    "cudart64_12.dll",
+    "cublas64_12.dll",
+    "cublasLt64_12.dll",
+    "cudnn64_9.dll",
+];
+
+static GPU_ACTIVE: AtomicBool = AtomicBool::new(false);
+/// Path of the "a GPU start is in progress" file, kept so the first model that
+/// loads can clear it from anywhere in the app.
+static ATTEMPT: Mutex<Option<PathBuf>> = Mutex::new(None);
+
+/// The ONNX Runtime provider the speech models should be created with.
+pub fn provider() -> &'static str {
+    if GPU_ACTIVE.load(Ordering::Relaxed) {
+        "cuda"
+    } else {
+        "cpu"
+    }
+}
+
+/// True when this process is running with the GPU pack's libraries loaded.
+pub fn is_active() -> bool {
+    GPU_ACTIVE.load(Ordering::Relaxed)
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GpuStatus {
+    /// An NVIDIA card was detected.
+    pub supported: bool,
+    pub gpu_name: Option<String>,
+    pub installed: bool,
+    /// Size of the installed pack on disk.
+    pub size_bytes: u64,
+    /// Download size of the pack.
+    pub download_bytes: u64,
+    /// The models in this process are running on the GPU.
+    pub active: bool,
+    /// Installed and enabled, but the app has to restart to use it.
+    pub restart_required: bool,
+    /// Open Local Assistant already has a pack this app can link.
+    pub reusable: bool,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GpuProgress {
+    /// "downloading" | "extracting" | "done" | "error" | "cancelled"
+    pub state: String,
+    pub downloaded_bytes: u64,
+    pub total_bytes: u64,
+    pub error: Option<String>,
+}
+
+/// The app data folder, resolved without Tauri so the GPU switch can happen
+/// before the app (and its single-instance guard) starts.
+pub fn default_data_dir() -> Option<PathBuf> {
+    let base = std::env::var_os("APPDATA")?;
+    Some(PathBuf::from(base).join("com.localdictation.app"))
+}
+
+/// Whether GPU acceleration is on: the "gpu" device choice in settings.json,
+/// read as a file because it is needed before the app (and its store) starts.
+pub fn is_enabled(data_dir: &Path) -> bool {
+    crate::settings::read(data_dir).device != "cpu"
+}
+
+pub fn set_enabled(data_dir: &Path, enabled: bool) -> AppResult<()> {
+    crate::settings::write_device(data_dir, if enabled { "gpu" } else { "cpu" })
+}
+
+/// Pack folder of Open Local Assistant, whose CUDA libraries this app can reuse.
+fn main_app_pack(data_dir: &Path) -> Option<PathBuf> {
+    let dir = data_dir
+        .parent()?
+        .join("com.localassistant.app")
+        .join("gpu")
+        .join(format!("cuda-{PACK_VERSION}"));
+    REQUIRED
+        .iter()
+        .all(|f| dir.join(f).is_file())
+        .then_some(dir)
+}
+
+/// True when another install's pack can be linked instead of downloaded.
+pub fn reusable(data_dir: &Path) -> bool {
+    !is_installed(data_dir) && main_app_pack(data_dir).is_some()
+}
+
+/// Links (or copies, across drives) the libraries of Open Local Assistant's
+/// pack into this app's pack folder, so ~1.7 GB is not downloaded twice.
+pub fn reuse_pack(data_dir: &Path) -> AppResult<()> {
+    let src = main_app_pack(data_dir)
+        .ok_or_else(|| AppError::Other("no CUDA pack to reuse was found".into()))?;
+    let dir = pack_dir(data_dir);
+    let staging = dir.with_file_name(format!("cuda-{PACK_VERSION}-staging"));
+    let _ = std::fs::remove_dir_all(&staging);
+    std::fs::create_dir_all(&staging)?;
+    for entry in std::fs::read_dir(&src)? {
+        let path = entry?.path();
+        let is_dll = path
+            .extension()
+            .and_then(|e| e.to_str())
+            .is_some_and(|e| e.eq_ignore_ascii_case("dll"));
+        if !is_dll {
+            continue;
+        }
+        let target = staging.join(path.file_name().unwrap_or_default());
+        if std::fs::hard_link(&path, &target).is_err() {
+            std::fs::copy(&path, &target)?;
+        }
+    }
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::rename(&staging, &dir)?;
+    tracing::info!(from = %src.display(), "reused the CUDA pack of Open Local Assistant");
+    Ok(())
+}
+
+/// A CUDA provider that cannot load its libraries takes the whole process down,
+/// which would leave the app in a restart loop. Each GPU start therefore leaves
+/// a file behind that the first model to load successfully removes; finding it
+/// at startup means the last GPU run died, so the app stays on the CPU.
+fn attempt_file(data_dir: &Path) -> PathBuf {
+    pack_dir(data_dir).with_file_name("starting")
+}
+
+/// Called once a speech model has been created: the GPU start worked.
+pub fn mark_healthy() {
+    let path = ATTEMPT.lock().unwrap_or_else(|p| p.into_inner()).take();
+    if let Some(path) = path {
+        let _ = std::fs::remove_file(path);
+    }
+}
+
+/// True when an NVIDIA driver is installed on this machine.
+fn has_nvidia_driver() -> bool {
+    let Some(root) = std::env::var_os("SystemRoot") else {
+        return false;
+    };
+    Path::new(&root)
+        .join("System32")
+        .join("nvcuda.dll")
+        .exists()
+}
+
+/// Called first thing at startup: relaunches this process with the GPU pack's
+/// libraries when the pack is installed and switched on. Returns true when the
+/// caller should exit because the replacement process is running.
+pub fn activate_early() -> bool {
+    let Some(dir) = default_data_dir() else {
+        return false;
+    };
+    if std::env::var_os(RELAUNCH_MARKER).is_none() {
+        if let Ok(exe) = std::env::current_exe() {
+            if is_pack_copy(&dir, &exe) {
+                // Started straight from the copy (an old autostart entry, a
+                // pinned shortcut): hand over to the installed app, which
+                // refreshes the copy before it runs again.
+                if let Some(installed) = recorded_launcher(&dir) {
+                    if std::process::Command::new(&installed)
+                        .args(std::env::args_os().skip(1))
+                        .spawn()
+                        .is_ok()
+                    {
+                        return true;
+                    }
+                }
+            } else {
+                record_launcher(&dir, &exe);
+            }
+        }
+    }
+    let enabled = is_enabled(&dir);
+    activate(&dir, enabled)
+}
+
+/// File holding the installed executable's path, for the copy in the pack folder.
+fn launcher_file(data_dir: &Path) -> PathBuf {
+    data_dir.join("gpu").join("launcher")
+}
+
+/// True when `exe` is the copy inside the app data folder, not the installed app.
+fn is_pack_copy(data_dir: &Path, exe: &Path) -> bool {
+    let gpu = data_dir.join("gpu").to_string_lossy().to_lowercase();
+    exe.to_string_lossy().to_lowercase().starts_with(&gpu)
+}
+
+fn record_launcher(data_dir: &Path, exe: &Path) {
+    let file = launcher_file(data_dir);
+    // Only once a pack is there: the folder is not created for CPU-only users.
+    if !file.parent().is_some_and(Path::is_dir) {
+        return;
+    }
+    let path = exe.to_string_lossy();
+    if std::fs::read_to_string(&file).ok().as_deref() != Some(&*path) {
+        let _ = std::fs::write(&file, path.as_bytes());
+    }
+}
+
+fn recorded_launcher(data_dir: &Path) -> Option<PathBuf> {
+    let path = PathBuf::from(
+        std::fs::read_to_string(launcher_file(data_dir))
+            .ok()?
+            .trim(),
+    );
+    path.is_file().then_some(path)
+}
+
+/// The installed executable, even when this process is the GPU copy. This is
+/// what "start with Windows" and similar entries must point at.
+pub fn launcher_exe() -> PathBuf {
+    let exe = std::env::current_exe().unwrap_or_default();
+    match default_data_dir() {
+        Some(dir) if is_pack_copy(&dir, &exe) => recorded_launcher(&dir).unwrap_or(exe),
+        _ => exe,
+    }
+}
+
+/// Starts a fresh copy of the installed app and returns true; the caller then
+/// exits. The new process waits a moment first (`--delay`), so this one has
+/// released the single-instance lock, and it must not inherit the GPU marker:
+/// it works out for itself whether to relaunch from the pack folder.
+pub fn restart() -> bool {
+    std::process::Command::new(launcher_exe())
+        .args(["--delay", "1500"])
+        .env_remove(RELAUNCH_MARKER)
+        .spawn()
+        .is_ok()
+}
+
+pub fn pack_dir(data_dir: &Path) -> PathBuf {
+    data_dir.join("gpu").join(format!("cuda-{PACK_VERSION}"))
+}
+
+pub fn is_installed(data_dir: &Path) -> bool {
+    let dir = pack_dir(data_dir);
+    REQUIRED.iter().all(|f| dir.join(f).is_file())
+}
+
+fn dir_size(dir: &Path) -> u64 {
+    let Ok(entries) = std::fs::read_dir(dir) else {
+        return 0;
+    };
+    entries
+        .filter_map(|e| e.ok())
+        .map(|e| match e.file_type() {
+            Ok(t) if t.is_dir() => dir_size(&e.path()),
+            Ok(_) => e.metadata().map(|m| m.len()).unwrap_or(0),
+            Err(_) => 0,
+        })
+        .sum()
+}
+
+pub fn status(data_dir: &Path, hw: &HardwareInfo, enabled: bool) -> GpuStatus {
+    let installed = is_installed(data_dir);
+    let active = is_active();
+    GpuStatus {
+        supported: hw.has_nvidia(),
+        gpu_name: hw.nvidia_name(),
+        installed,
+        size_bytes: if installed {
+            dir_size(&pack_dir(data_dir))
+        } else {
+            0
+        },
+        download_bytes: PACK_BYTES,
+        active,
+        restart_required: installed && enabled && !active,
+        reusable: reusable(data_dir),
+    }
+}
+
+/// Restarts the app from inside the pack folder, where the CUDA libraries are
+/// its nearest neighbours. Returns true when the replacement process started
+/// and this one should exit.
+pub fn activate(data_dir: &Path, enabled: bool) -> bool {
+    if std::env::var_os(RELAUNCH_MARKER).is_some() {
+        // This is the copy running inside the pack: it already loaded the CUDA
+        // libraries, because Windows looked in its own folder first.
+        GPU_ACTIVE.store(true, Ordering::Relaxed);
+        *ATTEMPT.lock().unwrap_or_else(|p| p.into_inner()) = Some(attempt_file(data_dir));
+        tracing::info!("speech models are running on the GPU");
+        return false;
+    }
+    if !enabled || !is_installed(data_dir) {
+        return false;
+    }
+    let attempt = attempt_file(data_dir);
+    if attempt.exists() {
+        tracing::warn!("the last GPU start did not finish, staying on the CPU");
+        let _ = std::fs::remove_file(&attempt);
+        let _ = set_enabled(data_dir, false);
+        return false;
+    }
+    if !has_nvidia_driver() {
+        tracing::warn!(
+            "GPU acceleration is on but no NVIDIA driver is installed, staying on the CPU"
+        );
+        return false;
+    }
+    let _ = std::fs::write(&attempt, b"1");
+    let dir = pack_dir(data_dir);
+    let copy = match stage_executable(&dir) {
+        Ok(p) => p,
+        Err(e) => {
+            tracing::warn!(error = %e, "could not place the app in the GPU pack folder, staying on the CPU");
+            return false;
+        }
+    };
+    match std::process::Command::new(&copy)
+        .args(std::env::args_os().skip(1))
+        .env(RELAUNCH_MARKER, "1")
+        .spawn()
+    {
+        Ok(child) => {
+            tracing::info!(exe = %copy.display(), "restarting with the GPU pack");
+            // Development builds wait for the copy (see `supervise`); release
+            // builds hand over to it and exit right away.
+            #[cfg(all(windows, debug_assertions))]
+            std::process::exit(supervise(child));
+            #[cfg(not(all(windows, debug_assertions)))]
+            {
+                drop(child);
+                true
+            }
+        }
+        Err(e) => {
+            tracing::warn!(error = %e, "could not restart with the GPU pack, staying on the CPU");
+            let _ = std::fs::remove_file(&attempt);
+            false
+        }
+    }
+}
+
+/// Development builds only: waits until the GPU copy exits and returns its
+/// exit code, for this process to exit with. `tauri dev` watches the process it launched; if that one
+/// quit right after the relaunch, `tauri dev` would take the app for closed
+/// and stop the Vite server the copy loads its pages from ("can't reach this
+/// page"). A job object ends the copy together with this process, so stopping
+/// `tauri dev` or a Rust rebuild never leaves a stale copy running.
+#[cfg(all(windows, debug_assertions))]
+fn supervise(mut child: std::process::Child) -> i32 {
+    use std::os::windows::io::AsRawHandle;
+    use windows::Win32::Foundation::HANDLE;
+    use windows::Win32::System::JobObjects::{
+        AssignProcessToJobObject, CreateJobObjectW, JobObjectExtendedLimitInformation,
+        SetInformationJobObject, JOBOBJECT_EXTENDED_LIMIT_INFORMATION,
+        JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE,
+    };
+    // SAFETY: plain Win32 calls on handles owned by this process. The job
+    // handle is deliberately never closed: the system closes it when this
+    // process ends, which is what ends the copy.
+    let tied = unsafe {
+        CreateJobObjectW(None, windows::core::PCWSTR::null()).and_then(|job| {
+            let mut info = JOBOBJECT_EXTENDED_LIMIT_INFORMATION::default();
+            info.BasicLimitInformation.LimitFlags = JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE;
+            SetInformationJobObject(
+                job,
+                JobObjectExtendedLimitInformation,
+                &info as *const _ as *const core::ffi::c_void,
+                std::mem::size_of::<JOBOBJECT_EXTENDED_LIMIT_INFORMATION>() as u32,
+            )?;
+            AssignProcessToJobObject(job, HANDLE(child.as_raw_handle()))
+        })
+    };
+    if let Err(e) = tied {
+        tracing::warn!(error = %e, "could not tie the GPU copy to this process");
+    }
+    child.wait().ok().and_then(|s| s.code()).unwrap_or(1)
+}
+
+/// Copies this executable into the pack folder, refreshing an older copy so an
+/// updated app never runs as a stale binary.
+fn stage_executable(pack: &Path) -> AppResult<PathBuf> {
+    let exe = std::env::current_exe()?;
+    let name = exe
+        .file_name()
+        .ok_or_else(|| AppError::Other("the app has no file name".into()))?;
+    let copy = pack.join(name);
+    let fresh = match (std::fs::metadata(&exe), std::fs::metadata(&copy)) {
+        (Ok(a), Ok(b)) => a.len() == b.len() && a.modified().ok() == b.modified().ok(),
+        _ => false,
+    };
+    if !fresh {
+        std::fs::copy(&exe, &copy)?;
+    }
+    Ok(copy)
+}
+
+/// Downloads and extracts the GPU pack into the app data folder.
+pub async fn install(
+    data_dir: &Path,
+    cancel: CancellationToken,
+    on_progress: &(dyn Fn(GpuProgress) + Send + Sync),
+) -> AppResult<()> {
+    let dir = pack_dir(data_dir);
+    // A sibling folder, not `with_extension`, which would eat the patch number.
+    let staging = dir.with_file_name(format!("cuda-{PACK_VERSION}-staging"));
+    let _ = std::fs::remove_dir_all(&staging);
+    std::fs::create_dir_all(&staging)?;
+
+    let progress = |state: &str, downloaded: u64, total: u64, error: Option<String>| {
+        on_progress(GpuProgress {
+            state: state.into(),
+            downloaded_bytes: downloaded,
+            total_bytes: total,
+            error,
+        })
+    };
+
+    let result: AppResult<()> = async {
+        let client = reqwest::Client::builder()
+            .connect_timeout(Duration::from_secs(20))
+            .user_agent(concat!("LocalDictation/", env!("CARGO_PKG_VERSION")))
+            .build()
+            .map_err(|e| AppError::Download(e.to_string()))?;
+        let resp = client
+            .get(PACK_URL)
+            .send()
+            .await
+            .map_err(|e| AppError::Download(e.to_string()))?;
+        if !resp.status().is_success() {
+            return Err(AppError::Download(format!(
+                "{PACK_URL} returned {}",
+                resp.status()
+            )));
+        }
+        let total = resp.content_length().unwrap_or(PACK_BYTES);
+        let archive = staging.join("pack.tar.bz2");
+        let mut out = std::fs::File::create(&archive)?;
+        let mut stream = resp.bytes_stream();
+        let mut got = 0u64;
+        let mut last = Instant::now();
+        loop {
+            let next = tokio::select! {
+                n = stream.next() => n,
+                _ = cancel.cancelled() => return Err(AppError::Cancelled),
+            };
+            let Some(chunk) = next else { break };
+            let chunk = chunk.map_err(|e| AppError::Download(e.to_string()))?;
+            out.write_all(&chunk)?;
+            got += chunk.len() as u64;
+            if last.elapsed() > Duration::from_millis(250) {
+                progress("downloading", got, total, None);
+                last = Instant::now();
+            }
+        }
+        out.flush()?;
+        drop(out);
+
+        progress("extracting", got, total, None);
+        let (src, dest) = (archive.clone(), staging.clone());
+        tokio::task::spawn_blocking(move || extract_tar_bz2(&src, &dest))
+            .await
+            .map_err(|e| AppError::Download(e.to_string()))??;
+        let _ = std::fs::remove_file(&archive);
+        flatten_libraries(&staging)?;
+
+        let mut done = got;
+        for part in CUDA_PARTS {
+            let zip_path = staging.join("part.zip");
+            let mut resp = client
+                .get(part.url)
+                .send()
+                .await
+                .map_err(|e| AppError::Download(e.to_string()))?;
+            if !resp.status().is_success() {
+                return Err(AppError::Download(format!(
+                    "{} returned {}",
+                    part.url,
+                    resp.status()
+                )));
+            }
+            let mut out = std::fs::File::create(&zip_path)?;
+            loop {
+                let next = tokio::select! {
+                    c = resp.chunk() => c.map_err(|e| AppError::Download(e.to_string()))?,
+                    _ = cancel.cancelled() => return Err(AppError::Cancelled),
+                };
+                let Some(chunk) = next else { break };
+                out.write_all(&chunk)?;
+                done += chunk.len() as u64;
+                if last.elapsed() > Duration::from_millis(250) {
+                    progress("downloading", done, PACK_BYTES, None);
+                    last = Instant::now();
+                }
+            }
+            out.flush()?;
+            drop(out);
+            progress("extracting", done, PACK_BYTES, None);
+            let (zip_path2, dest, wanted) = (zip_path.clone(), staging.clone(), part.wanted);
+            tokio::task::spawn_blocking(move || extract_zip_libraries(&zip_path2, &dest, wanted))
+                .await
+                .map_err(|e| AppError::Download(e.to_string()))??;
+            let _ = std::fs::remove_file(&zip_path);
+        }
+        let missing: Vec<&str> = REQUIRED
+            .iter()
+            .copied()
+            .filter(|f| !staging.join(f).is_file())
+            .collect();
+        if !missing.is_empty() {
+            return Err(AppError::Download(format!(
+                "the GPU pack is missing {}",
+                missing.join(", ")
+            )));
+        }
+        Ok(())
+    }
+    .await;
+
+    match result {
+        Ok(()) => {
+            let _ = std::fs::remove_dir_all(&dir);
+            if let Some(parent) = dir.parent() {
+                std::fs::create_dir_all(parent)?;
+            }
+            std::fs::rename(&staging, &dir)?;
+            tracing::info!(dir = %dir.display(), "GPU pack installed");
+            progress("done", PACK_BYTES, PACK_BYTES, None);
+            Ok(())
+        }
+        Err(e) => {
+            let _ = std::fs::remove_dir_all(&staging);
+            if matches!(e, AppError::Cancelled) {
+                progress("cancelled", 0, PACK_BYTES, None);
+            } else {
+                tracing::warn!(error = %e, "GPU pack download failed");
+                progress("error", 0, PACK_BYTES, Some(e.to_string()));
+            }
+            Err(e)
+        }
+    }
+}
+
+/// Pulls the named libraries out of an NVIDIA archive, wherever they sit in it,
+/// and drops them in the pack root next to everything else.
+fn extract_zip_libraries(archive: &Path, dest: &Path, wanted: &[&str]) -> AppResult<()> {
+    let file = std::fs::File::open(archive)?;
+    let mut zip = zip::ZipArchive::new(std::io::BufReader::new(file))
+        .map_err(|e| AppError::Download(e.to_string()))?;
+    let mut found = Vec::new();
+    for i in 0..zip.len() {
+        let mut entry = zip
+            .by_index(i)
+            .map_err(|e| AppError::Download(e.to_string()))?;
+        let Some(name) = entry
+            .enclosed_name()
+            .and_then(|p| p.file_name().map(|n| n.to_string_lossy().to_string()))
+        else {
+            continue;
+        };
+        if !wanted.iter().any(|w| w.eq_ignore_ascii_case(&name)) {
+            continue;
+        }
+        let mut out = std::fs::File::create(dest.join(&name))?;
+        std::io::copy(&mut entry, &mut out)?;
+        found.push(name);
+    }
+    let missing: Vec<&str> = wanted
+        .iter()
+        .copied()
+        .filter(|w| !found.iter().any(|f| f.eq_ignore_ascii_case(w)))
+        .collect();
+    if !missing.is_empty() {
+        return Err(AppError::Download(format!(
+            "{} does not contain {}",
+            archive.display(),
+            missing.join(", ")
+        )));
+    }
+    Ok(())
+}
+
+/// The archive keeps its libraries in `lib/` and `bin/`; the DLL search path
+/// only looks at one folder, so every library is moved to the pack root.
+fn flatten_libraries(root: &Path) -> AppResult<()> {
+    for sub in ["lib", "bin"] {
+        let dir = root.join(sub);
+        if !dir.is_dir() {
+            continue;
+        }
+        for entry in std::fs::read_dir(&dir)? {
+            let entry = entry?;
+            let path = entry.path();
+            if path
+                .extension()
+                .and_then(|e| e.to_str())
+                .map(|e| e.eq_ignore_ascii_case("dll"))
+                != Some(true)
+            {
+                continue;
+            }
+            let target = root.join(entry.file_name());
+            if target.exists() {
+                continue;
+            }
+            std::fs::rename(&path, &target)?;
+        }
+    }
+    // What is left in the archive's folders are headers, import libraries and
+    // sample programs: about a gigabyte this app never touches.
+    for sub in ["lib", "bin", "include"] {
+        let _ = std::fs::remove_dir_all(root.join(sub));
+    }
+    Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_pack_needs_all_its_libraries() {
+        let dir = tempfile::tempdir().unwrap();
+        let pack = pack_dir(dir.path());
+        std::fs::create_dir_all(&pack).unwrap();
+        assert!(!is_installed(dir.path()));
+        for f in REQUIRED {
+            std::fs::write(pack.join(f), b"x").unwrap();
+        }
+        assert!(is_installed(dir.path()));
+        std::fs::remove_file(pack.join(REQUIRED[1])).unwrap();
+        assert!(
+            !is_installed(dir.path()),
+            "a half-extracted pack must not count as installed"
+        );
+    }
+
+    #[test]
+    fn the_installed_app_is_remembered_for_the_pack_copy() {
+        let dir = tempfile::tempdir().unwrap();
+        let installed = dir.path().join("Program Files").join("app.exe");
+        std::fs::create_dir_all(installed.parent().unwrap()).unwrap();
+        std::fs::write(&installed, b"x").unwrap();
+        let copy = pack_dir(dir.path()).join("app.exe");
+
+        assert!(is_pack_copy(dir.path(), &copy));
+        assert!(!is_pack_copy(dir.path(), &installed));
+
+        record_launcher(dir.path(), &installed);
+        assert_eq!(
+            recorded_launcher(dir.path()),
+            None,
+            "nothing is written before a pack exists"
+        );
+
+        std::fs::create_dir_all(pack_dir(dir.path())).unwrap();
+        record_launcher(dir.path(), &installed);
+        assert_eq!(recorded_launcher(dir.path()), Some(installed));
+    }
+
+    /// Runs against the real NVIDIA archives when they have been downloaded:
+    /// LA_CUDA_ZIP_DIR=<folder with the archives> cargo test -- --ignored
+    #[test]
+    #[ignore]
+    fn takes_the_wanted_libraries_out_of_the_nvidia_archives() {
+        let src = std::path::PathBuf::from(
+            std::env::var("LA_CUDA_ZIP_DIR").expect("set LA_CUDA_ZIP_DIR"),
+        );
+        let out = tempfile::tempdir().unwrap();
+        for part in CUDA_PARTS {
+            let name = part.url.rsplit('/').next().unwrap();
+            let archive = src.join(name);
+            if !archive.is_file() {
+                eprintln!("skipping {name}, not downloaded");
+                continue;
+            }
+            extract_zip_libraries(&archive, out.path(), part.wanted).expect("extraction failed");
+            for w in part.wanted {
+                assert!(out.path().join(w).is_file(), "{w} missing");
+            }
+        }
+    }
+
+    #[test]
+    fn libraries_move_next_to_the_pack_root() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path();
+        std::fs::create_dir_all(root.join("lib")).unwrap();
+        std::fs::create_dir_all(root.join("bin")).unwrap();
+        std::fs::write(root.join("lib/onnxruntime.dll"), b"x").unwrap();
+        std::fs::write(root.join("bin/cudnn64_9.dll"), b"x").unwrap();
+        std::fs::write(root.join("lib/notes.txt"), b"x").unwrap();
+        flatten_libraries(root).unwrap();
+        assert!(root.join("onnxruntime.dll").is_file());
+        assert!(root.join("cudnn64_9.dll").is_file());
+        assert!(
+            !root.join("lib").exists(),
+            "the rest of the archive is thrown away"
+        );
+    }
+
+    #[test]
+    fn the_executable_is_staged_once_and_refreshed_when_it_changes() {
+        let dir = tempfile::tempdir().unwrap();
+        let pack = dir.path().join("pack");
+        std::fs::create_dir_all(&pack).unwrap();
+        let exe = std::env::current_exe().unwrap();
+        let copy = stage_executable(&pack).unwrap();
+        assert_eq!(copy, pack.join(exe.file_name().unwrap()));
+        assert_eq!(
+            std::fs::metadata(&copy).unwrap().len(),
+            std::fs::metadata(&exe).unwrap().len()
+        );
+
+        // A stale copy of a different size is replaced.
+        std::fs::write(&copy, b"old build").unwrap();
+        stage_executable(&pack).unwrap();
+        assert_eq!(
+            std::fs::metadata(&copy).unwrap().len(),
+            std::fs::metadata(&exe).unwrap().len()
+        );
+    }
+
+    #[test]
+    fn a_failed_gpu_start_turns_the_switch_back_off() {
+        let dir = tempfile::tempdir().unwrap();
+        let pack = pack_dir(dir.path());
+        std::fs::create_dir_all(&pack).unwrap();
+        for f in REQUIRED {
+            std::fs::write(pack.join(f), b"x").unwrap();
+        }
+        set_enabled(dir.path(), true).unwrap();
+        // A leftover file means the previous GPU run died before a model loaded.
+        std::fs::write(attempt_file(dir.path()), b"1").unwrap();
+        assert!(
+            !activate(dir.path(), true),
+            "a crashed GPU run must not be retried"
+        );
+        assert!(
+            !is_enabled(dir.path()),
+            "GPU must switch itself off after a crash"
+        );
+        assert!(!attempt_file(dir.path()).exists());
+    }
+
+    #[test]
+    fn provider_is_cpu_until_the_pack_is_active() {
+        assert_eq!(provider(), "cpu");
+    }
+}

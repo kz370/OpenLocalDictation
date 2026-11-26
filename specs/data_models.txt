@@ -1,0 +1,74 @@
+DATA MODELS — Open Local Dictation v0.1.0
+=========================================
+All wire types are camelCase JSON. Rust definitions are in src-tauri/src, TypeScript mirrors in src/types.ts.
+
+Settings (settings.rs, stored in <data>\settings.json; unknown/missing fields fall back to defaults; sanitize() runs on load and save)
+  model                string   ""                      "" = best available; else a catalog id (whisper-tiny|base|small) or "custom:<folder path>"
+  modelsDir            string   ""                      "" = <data>\models; set only by models_set_dir
+  device               string   "gpu"                   "gpu" | "cpu"; GPU only takes effect once the CUDA pack is installed and the app restarted
+  language             string   "auto"                  "auto" or a Whisper language code (lower case)
+  microphone           string?  null                    null = system default input
+  shortcut             string   "CommandOrControl+Alt+Space"
+  mode                 string   "hold"                  "hold" | "toggle"
+  insertMethod         string   "type"                  "type" | "paste"
+  addTrailingSpace     bool     true
+  reviewBeforeInsert   bool     true
+  startWithOs          bool     false
+  theme                string   "system"                "system" | "light" | "dark"
+  vadThreshold         f32      0.6                     clamped 0.2 .. 0.95
+  silenceMs            u32      800                     clamped 300 .. 3000 (VAD min silence = utterance boundary)
+  autoStopSilenceSecs  u32      8                       0 = never; max 120
+  overlayX / overlayY  i32?     null                    last dragged card position, physical px
+
+AppInfo            { version, paths{dataDir, logsDir}, hasNvidia, gpuName?, modelsDir, defaultModelsDir }
+AudioDevice        { id, name, isDefault }
+ModelEntry         { id, name, blurb, downloadBytes, installed, downloading, custom, path? }
+DownloadProgress   { modelId, state: downloading|verifying|done|error|cancelled, downloadedBytes, totalBytes, error? }
+GpuStatus          { supported, gpuName?, installed, sizeBytes, downloadBytes, active, restartRequired, reusable }
+GpuProgress        { state: downloading|extracting|done|error|cancelled, downloadedBytes, totalBytes, error? }
+AppError (wire)    { code, detail }
+
+VoiceEvent (stt/session.rs, tag "type")
+  state       { session, state: "listening"|"transcribing"|"idle" }
+  level       { value 0..1, bands[24] }
+  partial     { text }                       committed text so far, cleaned
+  transcript  { text, audioMs, elapsedMs }   final text of the take
+  error       { code, detail }
+
+DictationStateEvent (emitted as dictation://state)
+  { state, text?, targetApp?, result?{raw, inserted}, error?{code, detail} }
+
+Catalog (models.rs, CATALOG; HF = https://huggingface.co/csukuangfj)
+  id             repo                        prefix  encoder (int8)            decoder (int8)             size
+  whisper-tiny   sherpa-onnx-whisper-tiny    tiny    12 937 772 B  d24fb083…a434   89 855 401 B  d2fece8d…0925   ≈ 103.6 MB
+  whisper-base   sherpa-onnx-whisper-base    base    29 120 534 B  0b8fb130…1e11   130 672 026 B 9759d217…c02d   ≈ 160.6 MB
+  whisper-small  sherpa-onnx-whisper-small   small   112 442 483 B 4cbe7b22…33a9   262 226 114 B acad50b5…a8ee   ≈ 375.5 MB
+  tokens.txt for all three: 816 730 B, SHA-256 b34b360dbb493e781e479794586d661700670d65564001f23024971d1f2fa126
+  URL pattern: {HF}/{repo}/resolve/main/{prefix}-encoder.int8.onnx | -decoder.int8.onnx | -tokens.txt
+
+On-disk layout
+  <models root>/stt/<catalog id>/{encoder.int8.onnx, decoder.int8.onnx, tokens.txt, .complete}   (root named "stt" -> <root>/<id>)
+  <models root>/<any folder>/ or <models root>/stt/<any folder>/ holding encoder*.onnx + decoder*.onnx + *tokens.txt and NO file with "joiner" in its name  ->  custom model
+  A catalog id counts as installed when its folder has .complete OR looks like a valid Whisper folder (either layout)
+  <data>\vad\silero_vad.onnx           embedded in the exe (629 KB), written on start
+  <data>\settings.json
+  <data>\gpu\cuda-1.13.8\*.dll         CUDA pack + a copy of the exe; <data>\gpu\launcher (path of the installed exe); <data>\gpu\starting (crash guard)
+  <logs>\local-dictation.<date>.log    daily, 7 kept
+  <data> = %APPDATA%\com.localdictation.app
+
+Model selection (ModelStore::resolve)
+  1) settings.model if it is an installed catalog id   2) a custom model with that id
+  3) the largest installed catalog model (small > base > tiny)   4) the first custom model (alphabetical)
+
+CUDA pack (gpu.rs)
+  PACK_VERSION 1.13.8 (must equal the sherpa-onnx crate version). Required files: onnxruntime.dll, onnxruntime_providers_cuda.dll,
+  sherpa-onnx-c-api.dll, cudart64_12.dll, cublas64_12.dll, cublasLt64_12.dll, cudnn64_9.dll (+ the other cuDNN parts).
+  Sources: sherpa-onnx GPU archive from GitHub releases; cudart / cuBLAS / cuDNN from NVIDIA redistributables. Total ≈ 1.7 GB.
+  Reuse: %APPDATA%\com.localassistant.app\gpu\cuda-1.13.8 (Open Local Assistant) is hard-linked, copied when linking fails.
+
+Constants
+  Audio: 16 kHz mono, 100 Hz one-pole high-pass, level = RMS mapped -60..0 dB, spectrum = 24 log bands 80 Hz..4 kHz.
+  MIN_AUDIO_MS 350 · MAX_RECORDING 300 s · VAD window 512 samples · utterances are at most 20 s (VAD max_speech_duration), so Whisper never needs chunking.
+  Typing: 16 ms per character (measured; faster drops characters), review focus delay 150 ms.
+  Overlay card 480 x 176 logical px; menu room 240 px above/below; settings window 780 x 700.
+  Overlay linger after a take: 800 ms (inserted), 2200 ms (message).

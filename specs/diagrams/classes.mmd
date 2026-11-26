@@ -1,0 +1,29 @@
+classDiagram
+  class AppState {
+    paths
+    settings
+    models
+    stt
+    voice
+    hardware
+    downloads
+    dictation_busy
+    dictation_cancel
+    live_typer
+    dictation_review
+    dictation_target
+  }
+  class SettingsStore { +get() +update(f) }
+  class ModelStore { +resolve(chosen) +custom_models() +install(model) +set_root(dir) +installed_dir(id) }
+  class SttService { +with_recognizer(settings, f) +unload() +is_ready(settings) }
+  class VoiceSessions { +start() +stop(discard) +is_active() }
+  class LiveTyper { +set_target(app, text) +finish(text) +retract() }
+  class Recognizer { +transcribe(samples) }
+  AppState --> SettingsStore
+  AppState --> ModelStore
+  AppState --> SttService
+  AppState --> VoiceSessions
+  AppState --> LiveTyper
+  SttService --> ModelStore
+  SttService --> Recognizer
+  VoiceSessions --> SttService

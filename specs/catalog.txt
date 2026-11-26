@@ -1,0 +1,84 @@
+CATALOG — Open Local Dictation v0.1.0
+=====================================
+Every module, type, function and component with a one-line description. Paths are relative to the repo root.
+
+------------------------------------------------------------------------------
+BACKEND  src-tauri/src
+------------------------------------------------------------------------------
+main.rs            :: main — calls local_dictation_lib::run (windows_subsystem = "windows" in release).
+lib.rs             :: run — GPU early-relaunch, optional --delay, Tauri builder, plugins (dialog, global-shortcut, single-instance), setup, handlers.
+lib.rs             :: init_state — data dir, settings, hardware, ModelStore (honours modelsDir), SttService, VoiceSessions, AppState.
+lib.rs             :: on_voice_event — routes VoiceEvent: transcript -> run_dictation; state -> dictation://state; partial -> live typing; error -> retract + error state; level/partial -> overlay.
+lib.rs             :: run_dictation — cancel check, empty handling, review hold (set_overlay_review + "review" state) or insert_and_report.
+lib.rs             :: insert_and_report — finish live typing or type/paste the final text; emits inserted / error.
+lib.rs             :: confirm_review — takes the pending review, shrinks overlay, restores target focus, waits 150 ms, inserts.
+lib.rs             :: retry_dictation — discards review or running take (retracting typed text) and starts a new one.
+lib.rs             :: hide_overlay_later, retract_live_typed, retract_in_background, startup_delay — overlay linger, erase typed text, --delay parsing.
+state.rs           :: AppState, AppPaths, ReviewPending — shared state (settings, models, stt, voice, hardware, downloads, dictation flags, live typer, review, target hwnd).
+errors.rs          :: AppError (+ code()), AppResult — wire form {code, detail}.
+settings.rs        :: Settings, SettingsStore{load,get,update}, read, write_device — settings.json with sanitize().
+models.rs          :: CATALOG, CatalogModel, RemoteFile, find — three Whisper models with pinned SHA-256.
+models.rs          :: ModelStore{new,with_vad_dir,root,set_root,model_dir,installed_dir,is_installed,installed_ids,custom_models,resolve,install_bundled_vad,install} — folder handling, detection, consented download.
+models.rs          :: Resolved, CustomModel, ModelEntry, DownloadProgress — result and wire types.
+models.rs          :: is_whisper_folder, safe_join, extract_tar_bz2 — Whisper-folder test, path-traversal guard, bz2 extraction for the GPU pack.
+gpu.rs             :: activate_early, activate, stage_executable, supervise (debug) — relaunch from the CUDA pack folder; crash guard.
+gpu.rs             :: is_enabled, set_enabled, is_installed, status, GpuStatus, GpuProgress — pack state and the CPU/GPU flag (settings.json).
+gpu.rs             :: install, reuse_pack, reusable, main_app_pack, extract_zip_libraries, flatten_libraries — download pack parts or link Open Local Assistant's pack.
+gpu.rs             :: restart, launcher_exe, record_launcher, mark_healthy, provider — restart helper, installed exe path, crash-guard clear, ONNX provider.
+hardware.rs        :: detect, HardwareInfo{has_nvidia,nvidia_name,inference_threads}, GpuInfo — DXGI adapter list.
+logging.rs         :: init — daily rolling file log (7 files), LOCAL_DICTATION_LOG env filter.
+autostart.rs       :: set_enabled, sync — start-with-Windows entry pointing at the installed exe, not the GPU copy.
+tray.rs            :: create, quit — tray menu (Dictate, Settings, Quit); left click opens settings.
+shortcuts.rs       :: register_all, handle, dispatch, start_dictation, toggle_dictation, watch_dictation_target — hotkey (hold/toggle) and target tracking.
+shortcuts.rs       :: start_watcher (Windows), esc_pressed, is_modifier_only_shortcut, is_supported_modifier_only, windows_modifier_* — modifier-only combos (2+ modifiers) and Esc cancel.
+shortcuts.rs       :: register_review_shortcuts, unregister_all — review keys (Ctrl+Enter, Ctrl+Shift+Enter, Ctrl+Shift+Backspace) and recording release.
+window.rs          :: ensure_settings, open_settings — frameless fixed 780x700 settings window, hide-on-close.
+window.rs          :: create_overlay, show_overlay, hide_overlay, hide_overlay_if_session_idle, reset_overlay_position, cancel_dictation — overlay lifecycle and drag-position persistence.
+window.rs          :: set_overlay_review, discard_review, set_overlay_menu, set_overlay_region, strip_frame_styles, set_overlay_activatable — review focus, window region clip, menu room.
+window.rs          :: remember_target, refresh_dictation_target, restore_target, dictation_target_name, application_display_name, focus_hwnd — target-app capture and focus return.
+typing.rs          :: LiveTyper{set_target,finish,retract,snapshot,reset}, committed_prefix — live word-committed typing with desync recovery.
+typing.rs          :: insert_text, finalize_text, type_text, key_events::type_char, reconcile — scancode typing (16 ms/char), clipboard paste, trailing space.
+audio/mod.rs       :: level, spectrum, HighPassFilter, STT_SAMPLE_RATE — meter maths.
+audio/capture.rs   :: Capture{start,stop}, CaptureEvent — cpal microphone thread, retry on dead start, resample to 16 kHz.
+audio/devices.rs   :: list_inputs, input_device, AudioDevice, is_loopback_name — microphone discovery without loopback devices.
+stt/mod.rs         :: SttService{is_ready,with_recognizer,unload,loaded_model}, whisper_language, clean_transcript — loaded recognizer cache; language switched in place.
+stt/engine.rs      :: detect, create, set_language, Recognizer, EngineOptions, WhisperFiles — sherpa-onnx offline Whisper; raw C call for language switch.
+stt/session.rs     :: VoiceSessions{start,stop,is_active}, VoiceEvent, SessionCtx, SilenceGuard — one listening session, VAD + worker transcription.
+commands.rs        :: 25 IPC commands (see api_reference.md).
+
+------------------------------------------------------------------------------
+FRONTEND  src
+------------------------------------------------------------------------------
+main.tsx                       :: bootstrap, hash routing (#/overlay, #/settings), settings load, ErrorBoundary.
+ipc.ts                         :: ipc (typed invoke wrappers), on (event subscribe), toAppError, isAppError.
+types.ts                       :: TypeScript mirrors of every wire type.
+strings.ts                     :: t (English text), errorMessage (code -> fix text), formatBytes.
+settingsStore.ts               :: useSettings (zustand), applyTheme (system/light/dark following the OS).
+knownLanguages.ts              :: KNOWN_LANGUAGES — ~80 Whisper language codes with English and native names.
+pages/Overlay.tsx              :: Overlay — states, live text, spectrum, target-app tab, language pill, review editor, drag; PillMenu, HeadBtn, useOverlayDrag.
+pages/Settings.tsx             :: SettingsPage — frameless title bar + four tabs; ModelCard (folder, models, downloads), ProcessingCard (CPU/GPU, CUDA), Dictation card, App card.
+components/SearchSelect.tsx    :: SearchSelect — compact dropdown, filter box when the list is longer than six.
+components/ShortcutInput.tsx   :: ShortcutInput, acceleratorFromEvent, prettyAccelerator — records a hotkey; Reset asks first.
+components/controls.tsx        :: Switch, Segmented, Dialog (themed modal), ErrorNotice, textDir.
+components/layout.tsx          :: Card, Row.
+components/VoiceBars.tsx       :: VoiceBars — mirrored 24-band spectrum.
+components/ErrorBoundary.tsx   :: ErrorBoundary — shows a crash instead of a blank window.
+styles/tokens.css              :: design tokens, light/dark/high-contrast, teal accent.
+styles/base.css                :: buttons, inputs, switch, segmented, badges, dialog, notices.
+styles/app.css                 :: settings shell, title bar, tabs, rows, cards, model list, overlay, dropdowns.
+
+------------------------------------------------------------------------------
+BUILD AND CONFIG
+------------------------------------------------------------------------------
+src-tauri/Cargo.toml           :: crate local-dictation; sherpa-onnx "shared" linking; release profile opt-level "s", lto, strip.
+src-tauri/tauri.conf.json      :: productName "Open Local Dictation", identifier com.localdictation.app, no windows declared (created in code), NSIS target, CSP.
+src-tauri/capabilities/default.json :: core:default, set-position, start-dragging, minimize, dialog:allow-open, global-shortcut:default for windows settings + overlay.
+src-tauri/build.rs             :: tauri_build + rerun on ../dist change.
+build.bat                      :: frontend build, cargo release build, portable folder, Inno Setup installer; output release\v<version>\.
+local-dictation.iss            :: Inno Setup script (exe + four speech DLLs).
+vite.config.ts / tsconfig.json / package.json :: Vite dev server on 127.0.0.1:1430, strict TypeScript.
+AGENTS.md                      :: contributor rules, specs-sync mandate.
+
+Quality gates:
+  cd src-tauri && cargo fmt --all && cargo clippy --all-targets && cargo test
+  npm run typecheck && npm run build

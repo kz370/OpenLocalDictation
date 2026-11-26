@@ -1,0 +1,78 @@
+RELATIONSHIPS — Open Local Dictation v0.1.0
+Format: source | edge | target
+
+lib::run | calls | gpu::activate_early
+lib::run | calls | shortcuts::register_all
+lib::run | calls | window::create_overlay
+lib::run | calls | window::ensure_settings
+lib::run | calls | tray::create
+lib::init_state | calls | settings::SettingsStore::load
+lib::init_state | calls | hardware::detect
+lib::init_state | calls | models::ModelStore::install_bundled_vad
+lib::init_state | depends_on | stt::SttService
+lib::init_state | depends_on | stt::session::VoiceSessions
+stt::session::VoiceSessions | emits | lib::on_voice_event
+lib::on_voice_event | calls | lib::run_dictation
+lib::on_voice_event | calls | typing::LiveTyper::set_target
+lib::on_voice_event | emits | dictation://state
+lib::on_voice_event | emits | voice://event
+lib::run_dictation | calls | window::set_overlay_review
+lib::run_dictation | calls | lib::insert_and_report
+lib::run_dictation | reads | settings::Settings.reviewBeforeInsert
+lib::insert_and_report | calls | typing::LiveTyper::finish
+lib::insert_and_report | calls | typing::insert_text
+lib::confirm_review | calls | window::restore_target
+lib::confirm_review | calls | lib::insert_and_report
+lib::retry_dictation | calls | window::discard_review
+lib::retry_dictation | calls | shortcuts::start_dictation
+shortcuts::start_dictation | calls | window::remember_target
+shortcuts::start_dictation | calls | stt::session::VoiceSessions::start
+shortcuts::start_dictation | calls | window::show_overlay
+shortcuts::handle | calls | shortcuts::dispatch
+shortcuts::start_watcher | calls | window::cancel_dictation
+window::cancel_dictation | calls | window::discard_review
+window::dictation_target_name | reads | state::AppState.dictation_target
+stt::session::VoiceSessions::start | calls | audio::capture::Capture::start
+stt::session::VoiceSessions::start | depends_on | stt::SttService::is_ready
+stt::session::SessionCtx::warm_up | calls | stt::SttService::with_recognizer
+stt::session::SessionCtx::run | calls | stt::engine::Recognizer::transcribe
+stt::SttService::with_recognizer | calls | models::ModelStore::resolve
+stt::SttService::with_recognizer | calls | stt::engine::create
+stt::SttService::with_recognizer | calls | stt::engine::set_language
+stt::SttService::with_recognizer | calls | gpu::provider
+stt::engine::create | calls | gpu::mark_healthy
+models::ModelStore::resolve | calls | models::ModelStore::installed_dir
+models::ModelStore::resolve | calls | models::ModelStore::custom_models
+models::ModelStore::custom_models | calls | models::is_whisper_folder
+models::is_whisper_folder | calls | stt::engine::detect
+models::ModelStore::install | calls | models::safe_join
+gpu::is_enabled | reads | settings::read
+gpu::set_enabled | calls | settings::write_device
+gpu::install | calls | models::extract_tar_bz2
+gpu::activate | depends_on | gpu::attempt_file
+commands::save_settings | calls | shortcuts::register_all
+commands::save_settings | calls | autostart::set_enabled
+commands::save_settings | calls | stt::SttService::unload
+commands::models_download | calls | models::ModelStore::install
+commands::models_set_dir | calls | models::ModelStore::set_root
+commands::gpu_install | calls | gpu::reuse_pack
+commands::app_restart | calls | gpu::restart
+commands::app_restart | calls | tray::quit
+tray::create | calls | shortcuts::toggle_dictation
+tray::create | calls | window::open_settings
+autostart::set_enabled | calls | gpu::launcher_exe
+
+src/main.tsx | renders | src/pages/Overlay.tsx
+src/main.tsx | renders | src/pages/Settings.tsx
+src/main.tsx | calls | src/settingsStore.ts
+src/pages/Overlay.tsx | calls | src/ipc.ts
+src/pages/Overlay.tsx | listens | dictation://state, dictation://target, dictation://review-shortcut, voice://event
+src/pages/Overlay.tsx | depends_on | src/knownLanguages.ts
+src/pages/Settings.tsx | calls | src/ipc.ts
+src/pages/Settings.tsx | listens | models://changed, models://download, gpu://changed, gpu://download
+src/pages/Settings.tsx | depends_on | src/components/SearchSelect.tsx
+src/pages/Settings.tsx | depends_on | src/components/ShortcutInput.tsx
+src/pages/Settings.tsx | depends_on | src/components/controls.tsx
+src/settingsStore.ts | listens | settings://changed
+src/settingsStore.ts | calls | ipc.getSettings, ipc.saveSettings
+src/components/ShortcutInput.tsx | calls | ipc.shortcutsCapture

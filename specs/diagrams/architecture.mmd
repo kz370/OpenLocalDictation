@@ -1,0 +1,46 @@
+flowchart TB
+  subgraph UI["React UI (WebView2)"]
+    OV[pages/Overlay.tsx]
+    ST[pages/Settings.tsx]
+    IPC[ipc.ts + settingsStore.ts]
+  end
+  subgraph RS["Rust backend"]
+    CMD[commands.rs]
+    LIB[lib.rs dictation flow]
+    SC[shortcuts.rs]
+    WIN[window.rs]
+    VS[stt/session.rs VoiceSessions]
+    SS[stt/mod.rs SttService]
+    EN[stt/engine.rs]
+    AU[audio/capture.rs]
+    TY[typing.rs]
+    MD[models.rs]
+    GP[gpu.rs]
+    SE[settings.rs]
+  end
+  subgraph NAT["Native"]
+    SH[sherpa-onnx + ONNX Runtime DLLs]
+    MIC[WASAPI via cpal]
+    W32[Win32 SendInput / window APIs]
+  end
+  OV --> IPC
+  ST --> IPC
+  IPC -- invoke / events --> CMD
+  CMD --> LIB
+  CMD --> MD
+  CMD --> GP
+  CMD --> SE
+  SC --> LIB
+  SC --> WIN
+  LIB --> VS
+  LIB --> TY
+  LIB --> WIN
+  VS --> AU
+  VS --> SS
+  SS --> EN
+  SS --> MD
+  EN --> SH
+  AU --> MIC
+  TY --> W32
+  WIN --> W32
+  GP -. CUDA DLLs next to exe .-> SH

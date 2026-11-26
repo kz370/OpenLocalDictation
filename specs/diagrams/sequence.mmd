@@ -1,0 +1,28 @@
+sequenceDiagram
+  actor U as User
+  participant SC as shortcuts.rs
+  participant W as window.rs
+  participant VS as VoiceSessions
+  participant L as lib.rs
+  participant O as Overlay
+  participant A as Target app
+  U->>SC: press hotkey
+  SC->>W: remember_target (foreground HWND)
+  SC->>VS: start()
+  SC->>W: show_overlay
+  VS-->>O: state listening, level, partial
+  U->>SC: release hotkey (hold) / press again (toggle)
+  SC->>VS: stop(false)
+  VS-->>L: transcript
+  alt review on
+    L->>W: set_overlay_review(true)
+    L-->>O: state review
+    U->>O: edit, Ctrl+Enter
+    O->>L: dictation_confirm(text)
+    L->>W: restore_target, wait 150 ms
+    L->>A: type / paste text
+  else review off
+    L->>A: LiveTyper.finish(text)
+  end
+  L-->>O: state inserted
+  L->>W: hide_overlay_later

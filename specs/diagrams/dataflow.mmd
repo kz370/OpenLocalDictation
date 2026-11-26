@@ -1,0 +1,13 @@
+flowchart LR
+  MIC[Microphone] --> CAP[Capture: mono, 16 kHz, high-pass]
+  CAP -->|Level + spectrum| OVL[Overlay meter]
+  CAP -->|Samples| VAD[Silero VAD]
+  VAD -->|utterance| WRK[Worker: Whisper transcribe]
+  WRK --> CLEAN[clean_transcript]
+  CLEAN -->|partial| OVL
+  CLEAN --> TXT[Take text]
+  TXT -->|review on| ED[Overlay editor]
+  ED -->|Ctrl+Enter| INS[insert_text]
+  TXT -->|review off| LIVE[LiveTyper, word by word]
+  LIVE --> APP[Focused application]
+  INS --> APP
