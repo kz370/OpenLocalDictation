@@ -322,14 +322,19 @@ fn application_display_name(executable_stem: &str) -> String {
 /// resizing while it is on screen: a move always shows the card jumping for a
 /// frame or two before the webview catches up. The room is cut away with a
 /// window region (not drawn, clicks pass through); the open menu is added to
-/// the region. Fits the menu's 8 rows plus its gap from the pill.
-const MENU_ROOM: f64 = 240.0;
+/// the region. Fits the menu's rows plus its gap from the pill, and in the
+/// bubble style the pill above the mic circle with the review editor above it.
+const MENU_ROOM: f64 = 300.0;
 
 /// The open language menu's rectangle in the window (logical x, y, w, h).
 static MENU_RECT: Mutex<Option<[f64; 4]>> = Mutex::new(None);
 /// The small layout's bubble above the pill (live text or review editor),
 /// kept apart from the menu so neither replaces the other.
 static BUBBLE_RECT: Mutex<Option<[f64; 4]>> = Mutex::new(None);
+/// The small layout's visible shapes when it does not fill its box (the
+/// bubble style: the mic circle, and the pill above it while shown); each is
+/// fully rounded. `None` means the card fills its box. Small layout only.
+static CARD_RECTS: Mutex<Option<Vec<[f64; 4]>>> = Mutex::new(None);
 /// Card margin inside the window and corner radius, the menu's corner radius,
 /// and the room left around the menu for its shadow (logical px; must match
 /// .overlay-card / .overlay-lang-menu).
@@ -338,7 +343,7 @@ const CARD_RADIUS: f64 = 18.0;
 const APP_TAB_HEIGHT: f64 = 48.0;
 const APP_TAB_WIDTH_INSET: f64 = 36.0;
 const APP_TAB_OVERLAP: f64 = 4.0;
-const MENU_RADIUS: f64 = 10.0;
+const MENU_RADIUS: f64 = 16.0;
 const MENU_SHADOW: f64 = 14.0;
 
 fn room_px(w: &WebviewWindow) -> i32 {
@@ -442,6 +447,11 @@ fn set_overlay_region(app: &AppHandle, w: &WebviewWindow, clip: bool) {
     let room = room_px(w);
     let menu = *MENU_RECT.lock().unwrap_or_else(|p| p.into_inner());
     let bubble = *BUBBLE_RECT.lock().unwrap_or_else(|p| p.into_inner());
+    let shapes = if MINI.load(Ordering::Relaxed) {
+        CARD_RECTS.lock().unwrap_or_else(|p| p.into_inner()).clone()
+    } else {
+        None
+    };
     // SAFETY: plain Win32 calls on the overlay's own window handle. The menu
     // region is merged into the card's and freed; on success the system owns
     // the combined region, so it is not freed here.
@@ -449,15 +459,39 @@ fn set_overlay_region(app: &AppHandle, w: &WebviewWindow, clip: bool) {
         let region = clip.then(|| {
             // CreateRoundRectRgn takes the corner ellipse's size (2x radius) and
             // leaves out the right and bottom edges, hence +1.
-            let d = px(CARD_RADIUS + CARD_MARGIN) * 2;
-            let card = CreateRoundRectRgn(
-                0,
-                room,
-                size.width as i32 + 1,
-                size.height as i32 - room + 1,
-                d,
-                d,
-            );
+            let card = match shapes {
+                // Each shape plus its shadow margin, fully rounded. An empty
+                // list still leaves an (empty) region to merge into.
+                Some(shapes) => {
+                    let card = CreateRoundRectRgn(0, 0, 0, 0, 0, 0);
+                    for [x, y, cw, ch] in shapes {
+                        let m = CARD_MARGIN;
+                        let d = px(cw.min(ch) + 2.0 * m);
+                        let rgn = CreateRoundRectRgn(
+                            px(x - m),
+                            px(y - m),
+                            px(x + cw + m) + 1,
+                            px(y + ch + m) + 1,
+                            d,
+                            d,
+                        );
+                        CombineRgn(Some(card), Some(card), Some(rgn), RGN_OR);
+                        let _ = DeleteObject(HGDIOBJ(rgn.0));
+                    }
+                    card
+                }
+                None => {
+                    let d = px(CARD_RADIUS + CARD_MARGIN) * 2;
+                    CreateRoundRectRgn(
+                        0,
+                        room,
+                        size.width as i32 + 1,
+                        size.height as i32 - room + 1,
+                        d,
+                        d,
+                    )
+                }
+            };
             let tab = CreateRoundRectRgn(
                 px(APP_TAB_WIDTH_INSET),
                 room + px(CARD_MARGIN + APP_TAB_OVERLAP - APP_TAB_HEIGHT),
@@ -520,6 +554,18 @@ pub fn set_overlay_menu(app: &AppHandle, menu: Option<[f64; 4]>) {
 /// part of the overlay, or takes it away again (`None`).
 pub fn set_overlay_bubble(app: &AppHandle, bubble: Option<[f64; 4]>) {
     *BUBBLE_RECT.lock().unwrap_or_else(|p| p.into_inner()) = bubble;
+    if let Some(w) = app.get_webview_window(OVERLAY) {
+        let app2 = app.clone();
+        on_main(app, move || set_overlay_region(&app2, &w, true));
+    }
+}
+
+/// Sets the small layout's visible shapes (`Some` list of logical x, y, w, h
+/// in the window, each drawn fully rounded: the bubble style's mic circle and
+/// pill), or lets the card fill its whole box again (`None`). The page owns
+/// this: it adds a shape before showing it and drops it once it has faded.
+pub fn set_overlay_card(app: &AppHandle, shapes: Option<Vec<[f64; 4]>>) {
+    *CARD_RECTS.lock().unwrap_or_else(|p| p.into_inner()) = shapes;
     if let Some(w) = app.get_webview_window(OVERLAY) {
         let app2 = app.clone();
         on_main(app, move || set_overlay_region(&app2, &w, true));

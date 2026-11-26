@@ -399,6 +399,8 @@ pub fn run() {
             commands::overlay_set_pinned,
             commands::overlay_set_mini,
             commands::overlay_resize,
+            commands::overlay_fit_width,
+            commands::dictation_overlay_card,
             commands::dictation_toggle,
         ])
         .build(tauri::generate_context!())

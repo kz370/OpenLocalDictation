@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { Check, CheckCircle2, ChevronDown, Copy, Globe, Maximize2, Mic, Minimize2, Pencil, Pin, PinOff, RotateCcw, Settings as SettingsIcon, Square, X, XCircle } from "lucide-react";
 import { getCurrentWindow, PhysicalPosition } from "@tauri-apps/api/window";
 import { ipc, on } from "../ipc";
@@ -64,13 +64,47 @@ function useOverlayDrag(horizontalOnly: boolean, locked: boolean) {
 const MINI_MIN_W = 320; // keep in sync with MINI_MIN_WIDTH / MINI_MAX_WIDTH in settings.rs
 const MINI_MAX_W = 800;
 const MINI_DEFAULT_W = 400;
+/** Small card margins (8 + 8), border (1 + 1) and padding (12 + 10). */
+const PILL_CHROME = 16 + 2 + 22;
+/** Gap between header items of the small pill (.overlay-head gap). */
+const PILL_GAP = 8;
+
+/** Width a row of header items needs: every item at its natural width, the
+ *  status label at its CSS floor, plus the gaps between them. */
+function rowWidth(row: Element | undefined): number {
+  if (!row) return 0;
+  const px = (v: string) => parseFloat(v) || 0;
+  const items = (Array.from(row.children) as HTMLElement[]).filter((el) => {
+    const s = getComputedStyle(el);
+    return s.display !== "none" && s.position !== "absolute" && s.position !== "fixed";
+  });
+  let sum = PILL_GAP * Math.max(0, items.length - 1);
+  for (const el of items) {
+    const s = getComputedStyle(el);
+    sum += px(s.flexShrink) > 0 ? px(s.minWidth) : el.getBoundingClientRect().width;
+  }
+  return sum;
+}
+
+/** Narrowest window (logical px) that holds the small pill's header without
+ *  squeezing anything, plus the card's chrome. The bubble's pill keeps its
+ *  status centered, so both sides get the room of the wider one. */
+function pillMinWidth(head: HTMLElement): number {
+  // Constants, not computed styles: those are mid-animation while the pill
+  // grows. Must match .overlay-card.mini / .overlay-head.
+  if (!head.classList.contains("split")) return Math.ceil(rowWidth(head) + PILL_CHROME);
+  const [start, center, end] = Array.from(head.children);
+  const side = Math.max(rowWidth(start), rowWidth(end));
+  return Math.ceil(2 * side + rowWidth(center) + 2 * PILL_GAP + PILL_CHROME);
+}
 
 /** Drag handle on the small pill's right edge: width only. The window follows
  *  live; the width is saved when the drag ends. Double-click restores the
- *  default width. */
-function ResizeEdge() {
+ *  default width. Never narrower than the header content (`minWidth`). */
+function ResizeEdge(props: { minWidth: () => number }) {
   const drag = useRef<{ x: number; w: number; frame: number | null; next: number } | null>(null);
-  const send = (w: number, commit: boolean) => void ipc.overlayResize(w, commit).catch(quiet);
+  const floor = () => Math.max(MINI_MIN_W, props.minWidth());
+  const send = (w: number, commit: boolean) => void ipc.overlayResize(Math.max(floor(), w), commit).catch(quiet);
   return (
     <div
       className="overlay-resize"
@@ -83,7 +117,7 @@ function ResizeEdge() {
       onPointerMove={(e) => {
         const d = drag.current;
         if (!d || (e.buttons & 1) === 0) return;
-        d.next = Math.min(MINI_MAX_W, Math.max(MINI_MIN_W, Math.round(d.w + e.screenX - d.x)));
+        d.next = Math.min(MINI_MAX_W, Math.max(floor(), Math.round(d.w + e.screenX - d.x)));
         if (d.frame == null) {
           d.frame = requestAnimationFrame(() => {
             if (drag.current) drag.current.frame = null;
@@ -122,6 +156,17 @@ function HeadBtn(props: { label: string; onClick: () => void; children: React.Re
 
 const quiet = () => undefined;
 
+const HOVER_OPEN_MS = 120; // hover on the bubble before its pill shows (a pass-by does nothing)
+const HOVER_CLOSE_MS = 600; // grace after the pointer leaves before the pill hides again
+const PILL_FADE_MS = 200; // the pill going back into the circle (.overlay-pill transition) plus a frame
+/** Bubble style geometry (logical px); must match .overlay-card.bubble and
+ *  .overlay-pill in app.css. The circle's top is ORB_TOP below the card box's
+ *  top; the pill sits ORB_GAP above the circle. */
+const ORB = 44;
+const ORB_TOP = 12;
+const ORB_GAP = 6;
+const PILL_H = 52;
+
 /** The overlay's mic button: starts dictation when idle, stops and inserts
  *  while listening. Pressing it never starts a drag. */
 function MicBtn(props: { live: boolean; onClick: () => void }) {
@@ -141,11 +186,11 @@ function MicBtn(props: { live: boolean; onClick: () => void }) {
   );
 }
 
-const MENU_ROW = 27; // option height + gap
-const MENU_PAD = 10; // padding + border
+const MENU_ROW = 32; // option height + gap
+const MENU_PAD = 12; // padding + border
 const MENU_MAX_ROWS = 6;
 const MENU_GAP = 6; // between the pill and the menu
-const MENU_W = 210; // matches .overlay-lang-menu
+const MENU_W = 200; // matches .overlay-lang-menu
 const MENU_LEAVE_MS = 500; // grace before a pointer that left the overlay closes the menu
 
 /** The window has one menu rectangle (MENU_RECT in window.rs), so the pill
@@ -341,6 +386,7 @@ export function Overlay() {
   const miniChoice = useSettings((s) => s.settings?.overlayMini ?? false);
   const mini = layouts === "small" ? true : layouts === "large" ? false : miniChoice;
   const sizeLocked = useSettings((s) => s.settings?.overlaySizeLocked ?? false);
+  const overlayStyle = useSettings((s) => s.settings?.overlayStyle ?? "pill");
   const shortcut = useSettings((s) => s.settings?.shortcut ?? "");
   const textRef = useRef<HTMLDivElement>(null);
   const editRef = useRef<HTMLTextAreaElement>(null);
@@ -352,6 +398,19 @@ export function Overlay() {
   const horizontalOnly = useSettings((s) => s.settings?.overlayHorizontalOnly ?? true);
   const positionLocked = useSettings((s) => s.settings?.overlayPositionLocked ?? false);
   const drag = useOverlayDrag(horizontalOnly, positionLocked);
+  const headRef = useRef<HTMLDivElement>(null);
+  // Small idle pill folds to a circle; a short hover unfolds it.
+  const [hover, setHover] = useState(false);
+  const hoverTimer = useRef<number | undefined>(undefined);
+  const hoverIn = () => {
+    window.clearTimeout(hoverTimer.current);
+    hoverTimer.current = window.setTimeout(() => setHover(true), HOVER_OPEN_MS);
+  };
+  const hoverOut = () => {
+    window.clearTimeout(hoverTimer.current);
+    hoverTimer.current = window.setTimeout(() => setHover(false), HOVER_CLOSE_MS);
+  };
+  useEffect(() => () => window.clearTimeout(hoverTimer.current), []);
 
   useEffect(() => {
     document.documentElement.classList.add("overlay");
@@ -474,6 +533,50 @@ export function Overlay() {
   const listening = state === "listening";
   const idle = state === "idle";
   const miniView = mini;
+  // Bubble style: a mic circle stays on screen; the pill (without the mic)
+  // shows above it while dictating, while hovered or while its menu is open.
+  const bubble = miniView && overlayStyle === "bubble";
+  const pillShown = !bubble || !idle || hover || langOpen;
+  const [winW, setWinW] = useState(window.innerWidth);
+  useEffect(() => {
+    const onResize = () => setWinW(window.innerWidth);
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
+  }, []);
+  // The window region follows the visible shapes: the circle, plus the pill
+  // while it shows. The pill's shape is added before it fades in and dropped
+  // once it has faded out. Computed from the layout constants (not measured)
+  // because the pill is mid-animation when this runs.
+  useEffect(() => {
+    if (!bubble) {
+      void ipc.dictationOverlayCard(null).catch(quiet);
+      return;
+    }
+    const room = parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--menu-room")) || 300;
+    const orbTop = room + ORB_TOP;
+    const orb: [number, number, number, number] = [winW / 2 - ORB / 2, orbTop, ORB, ORB];
+    const pill: [number, number, number, number] = [8, orbTop - ORB_GAP - PILL_H, winW - 16, PILL_H];
+    if (pillShown) {
+      void ipc.dictationOverlayCard([orb, pill]).catch(quiet);
+      return;
+    }
+    const id = window.setTimeout(() => void ipc.dictationOverlayCard([orb]).catch(quiet), PILL_FADE_MS);
+    return () => window.clearTimeout(id);
+  }, [bubble, pillShown, winW]);
+  // Never leave the window clipped to the bubble when the page goes away.
+  useEffect(() => () => void ipc.dictationOverlayCard(null).catch(quiet), []);
+  // The pill always fits its header: grow (and save) the width when the
+  // current state needs more room than it has.
+  const fitSent = useRef(0);
+  useLayoutEffect(() => {
+    const head = headRef.current;
+    if (!miniView || !pillShown || !head) return;
+    const need = pillMinWidth(head);
+    if (need > window.innerWidth && need !== fitSent.current) {
+      fitSent.current = need;
+      void ipc.overlayFitWidth(need).catch(quiet);
+    }
+  });
   const targetTracking = !miniView && (listening
     || state === "transcribing"
     || state === "correcting"
@@ -588,6 +691,43 @@ export function Overlay() {
       .catch((e: unknown) => setError(`Could not copy dictation text: ${String(e)}`));
   };
 
+  const headLabel = (
+    <span className={`overlay-label${hint ? " hint" : miniApp ? " app" : ""}`}>
+      {hint ?? miniApp ?? label}
+    </span>
+  );
+  const langPill = (miniView ? idle || listening || state === "review" : listening || state === "review") && (
+    <div className="overlay-pills">
+      <PillMenu label={t("overlay.language")} icon={<Globe size={12} aria-hidden />} value={language} options={languageOptions} onChange={changeLanguage} resetKey={state} searchable={languageOptions.length > 4} searchPlaceholder={t("overlay.searchLanguages")} openRef={openLang} onOpenChange={setLangOpen} />
+    </div>
+  );
+  const headButtons = (
+    <>
+      {showSettingsBtn && !reviewEditorOpen && (
+        <HeadBtn label={t("overlay.settings")} onClick={() => void ipc.settingsOpen().catch(quiet)}>
+          <SettingsIcon size={13} />
+        </HeadBtn>
+      )}
+      {layouts === "both" && !reviewEditorOpen && (
+        <HeadBtn label={t(mini ? "overlay.makeFull" : "overlay.makeMini")} onClick={() => void ipc.overlaySetMini(!mini).catch(quiet)}>
+          {mini ? <Maximize2 size={13} /> : <Minimize2 size={13} />}
+        </HeadBtn>
+      )}
+      {!(miniView && !idle) && (
+        <HeadBtn label={t(pinned ? "overlay.unpin" : "overlay.pin")} onClick={() => void ipc.overlaySetPinned(!pinned).catch(quiet)}>
+          {pinned ? <PinOff size={13} /> : <Pin size={13} />}
+        </HeadBtn>
+      )}
+      {/* Idle: closes the window (and unpins it); never quits the app. */}
+      <HeadBtn
+        label={idle ? t("overlay.close") : `${t("voice.cancel")} (Esc)`}
+        onClick={() => void (idle ? ipc.overlaySetPinned(false) : ipc.dictationCancel()).catch(quiet)}
+      >
+        <X size={14} />
+      </HeadBtn>
+    </>
+  );
+
   const editorBody = (
         <>
           <textarea
@@ -641,8 +781,71 @@ export function Overlay() {
         </>
   );
 
+  const resizeEdge = miniView && !sizeLocked && <ResizeEdge minWidth={() => (headRef.current ? pillMinWidth(headRef.current) : 0)} />;
+  const sub =
+    showSub &&
+    (reviewEditorOpen ? (
+      <div className="overlay-sub editing" ref={subRef}>
+        {editorBody}
+      </div>
+    ) : (
+      <div className="overlay-sub" ref={subRef} dir={textDir(text)}>
+        {text}
+      </div>
+    ));
+  // Drag to move; double-click puts the overlay back in its default spot.
+  const dragProps = {
+    onPointerDown: drag.onPointerDown,
+    onPointerMove: drag.onPointerMove,
+    onPointerUp: drag.onPointerUp,
+    onDoubleClick: () => (positionLocked ? undefined : void ipc.dictationResetOverlayPosition().catch(quiet)),
+  };
+  // Header: what is happening, the language, and close. In the bubble style
+  // the mic lives in the circle below, not here.
+  const head = (
+    <div
+      ref={headRef}
+      className={`overlay-head${bubble ? " split" : ""}${positionLocked ? " locked" : ""}`}
+      {...dragProps}
+      onContextMenu={(e) => {
+        // Right click on the pill: the language menu.
+        e.preventDefault();
+        openLang.current?.();
+      }}
+    >
+      {bubble ? (
+        // Bubble pill: the status sits in the middle, over the circle; the
+        // language chip holds the left edge and the buttons the right edge.
+        <>
+          <div className="overlay-side start">{langPill}</div>
+          <div className="overlay-center">
+            {listening && <VoiceBars bands={bands} level={level} label={t("voice.level")} />}
+            {headLabel}
+          </div>
+          <div className="overlay-side end">{headButtons}</div>
+        </>
+      ) : (
+        <>
+          <span className="overlay-icon">{icon}</span>
+          {miniView && listening && <VoiceBars bands={bands} level={level} label={t("voice.level")} />}
+          {headLabel}
+          {!miniView && listening && <VoiceBars bands={bands} level={level} label={t("voice.level")} />}
+          {!miniView && <span style={{ flex: 1 }} />}
+          {langPill}
+          {headButtons}
+        </>
+      )}
+    </div>
+  );
+
   return (
-    <div className={`overlay-card${state === "inserted" ? " done" : ""}${miniView ? " mini" : ""}`} role="status" aria-live="polite">
+    <div
+      className={`overlay-card${state === "inserted" ? " done" : ""}${miniView ? " mini" : ""}${bubble ? " bubble" : ""}`}
+      role="status"
+      aria-live="polite"
+      onPointerEnter={hoverIn}
+      onPointerLeave={hoverOut}
+    >
       {targetTracking && (
         <div
           className="overlay-app-tab"
@@ -662,66 +865,34 @@ export function Overlay() {
         </div>
       )}
       <TooltipLayer inline={setHint} />
-      {miniView && !sizeLocked && <ResizeEdge />}
-      {showSub &&
-        (reviewEditorOpen ? (
-          <div className="overlay-sub editing" ref={subRef}>
-            {editorBody}
+      {bubble ? (
+        <>
+          {/* The circle: state icon and mic button; drags the overlay. A
+              right click shows the pill. */}
+          <div
+            className={`overlay-orb${positionLocked ? " locked" : ""}`}
+            {...dragProps}
+            onContextMenu={(e) => {
+              e.preventDefault();
+              setHover(true);
+            }}
+          >
+            {icon}
           </div>
-        ) : (
-          <div className="overlay-sub" ref={subRef} dir={textDir(text)}>
-            {text}
+          <div className={`overlay-pill${pillShown ? " shown" : ""}`} aria-hidden={!pillShown}>
+            {resizeEdge}
+            {sub}
+            {/* The drawn pill; it pops out of the circle. */}
+            <div className="overlay-pill-body">{head}</div>
           </div>
-        ))}
-      {/* Header: what is happening, the language, and close. Drag to move;
-          double-click puts the overlay back in its default spot. */}
-      <div
-        className={`overlay-head${positionLocked ? " locked" : ""}`}
-        onPointerDown={drag.onPointerDown}
-        onPointerMove={drag.onPointerMove}
-        onPointerUp={drag.onPointerUp}
-        onContextMenu={(e) => {
-          // Right click on the pill: the language menu.
-          e.preventDefault();
-          openLang.current?.();
-        }}
-        onDoubleClick={() => (positionLocked ? undefined : void ipc.dictationResetOverlayPosition().catch(quiet))}
-      >
-        <span className="overlay-icon">{icon}</span>
-        {miniView && listening && <VoiceBars bands={bands} level={level} label={t("voice.level")} />}
-        <span className={`overlay-label${hint ? " hint" : miniApp ? " app" : ""}`}>
-          {hint ?? miniApp ?? label}
-        </span>
-        {!miniView && listening && <VoiceBars bands={bands} level={level} label={t("voice.level")} />}
-        {!miniView && <span style={{ flex: 1 }} />}
-        {(miniView ? idle || listening || state === "review" : listening || state === "review") && (
-          <div className="overlay-pills">
-            <PillMenu label={t("overlay.language")} icon={<Globe size={12} aria-hidden />} value={language} options={languageOptions} onChange={changeLanguage} resetKey={state} searchable={languageOptions.length > 4} searchPlaceholder={t("overlay.searchLanguages")} openRef={openLang} onOpenChange={setLangOpen} />
-          </div>
-        )}
-        {showSettingsBtn && !reviewEditorOpen && (
-          <HeadBtn label={t("overlay.settings")} onClick={() => void ipc.settingsOpen().catch(quiet)}>
-            <SettingsIcon size={13} />
-          </HeadBtn>
-        )}
-        {layouts === "both" && !reviewEditorOpen && (
-          <HeadBtn label={t(mini ? "overlay.makeFull" : "overlay.makeMini")} onClick={() => void ipc.overlaySetMini(!mini).catch(quiet)}>
-            {mini ? <Maximize2 size={13} /> : <Minimize2 size={13} />}
-          </HeadBtn>
-        )}
-        {!(miniView && !idle) && (
-          <HeadBtn label={t(pinned ? "overlay.unpin" : "overlay.pin")} onClick={() => void ipc.overlaySetPinned(!pinned).catch(quiet)}>
-            {pinned ? <PinOff size={13} /> : <Pin size={13} />}
-          </HeadBtn>
-        )}
-        {/* Idle: closes the window (and unpins it); never quits the app. */}
-        <HeadBtn
-          label={idle ? t("overlay.close") : `${t("voice.cancel")} (Esc)`}
-          onClick={() => void (idle ? ipc.overlaySetPinned(false) : ipc.dictationCancel()).catch(quiet)}
-        >
-          <X size={14} />
-        </HeadBtn>
-      </div>
+        </>
+      ) : (
+        <>
+          {resizeEdge}
+          {sub}
+          {head}
+        </>
+      )}
       {reviewEditorOpen && !miniView ? (
         editorBody      ) : miniView ? null : (
         <>

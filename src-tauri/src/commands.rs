@@ -54,6 +54,7 @@ pub fn save_settings(
         }
     }
     if saved.overlay_layouts != before.overlay_layouts
+        || saved.overlay_style != before.overlay_style
         || saved.overlay_horizontal_only != before.overlay_horizontal_only
     {
         window::refresh_overlay_layout(&app);
@@ -517,6 +518,32 @@ pub fn overlay_resize(
         let _ = app.emit("settings://changed", &saved);
     }
     Ok(())
+}
+
+/// Grows the small overlay so its header content fits (`width` measured by the
+/// page, logical px). Never shrinks it, and applies even while the size is
+/// locked: a pill too narrow for its own buttons is never wanted. Saved.
+#[tauri::command]
+pub fn overlay_fit_width(app: AppHandle, state: State<'_, AppState>, width: u32) -> CmdResult<()> {
+    let width = width.clamp(
+        crate::settings::MINI_MIN_WIDTH,
+        crate::settings::MINI_MAX_WIDTH,
+    );
+    if state.settings.get().overlay_mini_width >= width {
+        return Ok(());
+    }
+    window::resize_overlay_mini(&app, width);
+    let saved = state.settings.update(|s| s.overlay_mini_width = width)?;
+    let _ = app.emit("settings://changed", &saved);
+    Ok(())
+}
+
+/// Sets the small overlay's visible shapes (logical x, y, width, height in the
+/// window, each fully rounded: the bubble style's mic circle and the pill
+/// above it), or lets the card fill its box again (`None`).
+#[tauri::command]
+pub fn dictation_overlay_card(app: AppHandle, shapes: Option<Vec<[f64; 4]>>) {
+    window::set_overlay_card(&app, shapes);
 }
 
 /// The overlay's mic button: starts dictation, or stops and inserts when

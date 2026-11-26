@@ -54,6 +54,8 @@ There is **no** command that removes the CUDA libraries.
 | `overlay_set_mini` | `mini: bool` | `()` | Saves `overlayMini`, emits `settings://changed`, re-applies the small (400x68) or full (480x176) layout. Review stays small: its editor floats above the pill. |
 | `dictation_toggle` | — | `()` | Overlay mic button: starts dictation, or stops and inserts when listening. |
 | `overlay_resize` | `width: u32, commit: bool` | `()` | Small overlay width in logical px (clamped 320-800). Applies to the window live; `commit` saves `overlayMiniWidth` and emits `settings://changed`. Ignored while `overlaySizeLocked`. |
+| `overlay_fit_width` | `width: u32` | `()` | Grows the small overlay to the header width the page measured (logical px, clamped 320-800) and saves `overlayMiniWidth` (emits `settings://changed`). Never shrinks; applies even while `overlaySizeLocked`. |
+| `dictation_overlay_card` | `shapes: [x,y,w,h][]?` | `()` | Small layout only: cuts the card's part of the window region to these fully rounded shapes (logical rects in the window: the bubble style's circle and, while shown, its pill), or lets the card fill its box again (`null`). |
 | `dictation_overlay_bubble` | `bubble: [x,y,w,h]?` | `()` | Adds the small overlay's bubble (live text or review editor) to the window's visible region, kept apart from the language-menu rectangle, or removes it. |
 | `dictation_overlay_menu` | `menu?: [x,y,w,h]` | `()` | Adds the open language menu to the overlay window region (or removes it). |
 

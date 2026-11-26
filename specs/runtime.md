@@ -56,3 +56,11 @@ Files Processed: 65 — COMPLETE
 - [2026-11-27T05:10:00Z] Overlay: no tooltip on the drag area (the whole header showed a long hint); hint text in the header is plain, not italic.
 - [2026-11-27T05:30:00Z] Small pill: language chip and right-click language menu; bubble rectangle split from the menu rectangle (dictation_overlay_bubble).
 - [2026-11-27T05:50:00Z] Dropdowns (SearchSelect, overlay language menu) get a search box when they list more than 4 options (was 6 / always).
+- [2026-11-27T06:30:00Z] Small pill folds into a centered mic circle while idle and not hovered (dictation_overlay_card, CARD_RECT region); hover unfolds it. Header items keep natural width and the pill grows to fit them (overlay_fit_width, pillMinWidth). Language menu restyled with concentric 16/11 px corners and an even shadow (MENU_RADIUS 16).
+- [2026-11-27T07:10:00Z] Replaced the folding pill with an optional bubble style (overlayStyle pill|bubble): mic circle on screen, pill without the mic grows out of it on hover or while dictating, joined by a neck. dictation_overlay_card now takes a list of shapes (CARD_RECTS); MENU_ROOM 240 -> 300.
+- [2026-11-27T07:40:00Z] Bubble style: wider neck (88 px, 12 px gap, curves into the circle's outline); bubble pill centers the status with the language chip and buttons on the edges (.overlay-head.split).
+- [2026-11-27T08:00:00Z] Bubble neck reshaped (120 x 29 rounded inverted triangle into the circle's sides); pill bottom border and circle ring masked under it instead of covered; neck added to the region shapes.
+- [2026-11-27T08:20:00Z] Bubble neck is a straight-sided inverted pyramid (96 x 19); pill and neck now pop out of the circle (fade + scale from its center) instead of morphing from it.
+- [2026-11-27T08:40:00Z] Bubble neck replaced by a chin (152 x 51): rounded joints, straight sides tangent to the circle, circle's lower half as its bottom; tinted halo on the mic.
+- [2026-11-27T08:50:00Z] Fix: the chin SVG no longer takes clicks (pointer-events: none); its box covered the mic once the pill showed, so the circle's mic did nothing.
+- [2026-11-27T09:00:00Z] Bubble chin removed: pill and circle are separate shapes with a 6 px gap (ORB_GAP 6); no masks or neck region shape.

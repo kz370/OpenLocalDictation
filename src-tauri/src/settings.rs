@@ -65,6 +65,10 @@ pub struct Settings {
     pub overlay_mini_width: u32,
     /// Locks the small overlay's width: no resize handle.
     pub overlay_size_locked: bool,
+    /// Look of the small overlay: "pill" (one pill with the mic inside, always
+    /// shown) | "bubble" (a mic circle; the pill shows above it on hover and
+    /// while dictating).
+    pub overlay_style: String,
 }
 
 impl Default for Settings {
@@ -97,6 +101,7 @@ impl Default for Settings {
             overlay_position_locked: false,
             overlay_mini_width: 400,
             overlay_size_locked: false,
+            overlay_style: "pill".into(),
         }
     }
 }
@@ -135,6 +140,7 @@ impl Settings {
             self.shortcut = Settings::default().shortcut;
         }
         self.overlay_layouts = pick(&self.overlay_layouts, &["small", "large", "both"], "small");
+        self.overlay_style = pick(&self.overlay_style, &["pill", "bubble"], "pill");
         self.overlay_opacity = self.overlay_opacity.clamp(30, 100);
         self.overlay_mini_width = self
             .overlay_mini_width

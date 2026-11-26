@@ -41,6 +41,8 @@ export interface Settings {
   overlayMiniWidth: number;
   /** No resize handle on the small overlay. */
   overlaySizeLocked: boolean;
+  /** Small overlay look: one pill with the mic, or a mic bubble with the pill above it on hover. */
+  overlayStyle: "pill" | "bubble";
 }
 
 export interface AppInfo {

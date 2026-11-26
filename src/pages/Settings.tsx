@@ -3,6 +3,7 @@ import { open as pickFolder } from "@tauri-apps/plugin-dialog";
 import {
   Brain,
   Check,
+  CircleDot,
   ClipboardPaste,
   Cpu,
   Download,
@@ -536,6 +537,19 @@ export function SettingsPage() {
               onChange={(v) => set((d) => void (d.overlayLayouts = v))}
             />
           </Row>
+          {settings.overlayLayouts !== "large" && (
+            <Row label="Small overlay style" icon={<CircleDot size={16} />} hint="Pill: one pill with the mic, always shown. Bubble: only a mic button stays on screen; the pill opens above it when you point at it or dictate.">
+              <Segmented
+                label="Small overlay style"
+                value={settings.overlayStyle}
+                options={[
+                  { value: "pill", label: "Pill" },
+                  { value: "bubble", label: "Bubble" },
+                ]}
+                onChange={(v) => set((d) => void (d.overlayStyle = v))}
+              />
+            </Row>
+          )}
           <Row label="Settings button" icon={<SettingsIcon size={16} />} hint="Shows a gear in the overlay that opens these settings." htmlFor="sw-gear">
             <Switch id="sw-gear" label="Settings button" checked={settings.overlayShowSettings} onChange={(v) => set((d) => void (d.overlayShowSettings = v))} />
           </Row>
