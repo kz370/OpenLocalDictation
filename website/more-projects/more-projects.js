@@ -44,7 +44,7 @@
       blurb:
         "Free, private desktop AI assistant for Windows. Chat, voice, hands-free calls and dictation, local with LM Studio or hosted.",
       icon: "open-local-assistant.webp",
-      site: "",
+      site: "https://kz370.github.io/OpenLocalAssistant/",
       github: "https://github.com/kz370/OpenLocalAssistant",
     },
   ];
