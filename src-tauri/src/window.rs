@@ -627,6 +627,28 @@ fn default_overlay_position(w: &WebviewWindow) -> Option<(i32, i32)> {
     Some((x, y))
 }
 
+/// Top of the card when it sits just above the bottom of the work area of the
+/// monitor that holds (x, y): where the sideways-only overlay lives.
+fn docked_y(w: &WebviewWindow, x: i32, y: i32) -> Option<i32> {
+    let monitors = w.available_monitors().ok()?;
+    let m = monitors
+        .iter()
+        .find(|m| {
+            let (p, s) = (m.position(), m.size());
+            x >= p.x && y >= p.y && x < p.x + s.width as i32 && y < p.y + s.height as i32
+        })
+        .cloned()
+        .or_else(|| w.primary_monitor().ok().flatten())?;
+    let area = m.work_area();
+    let scale = m.scale_factor();
+    let (_, lh) = card_dims();
+    let ch = (lh * scale).round() as i32;
+    Some(
+        area.position.y + area.size.height as i32 - ch
+            + ((CARD_MARGIN - OVERLAY_BOTTOM_GAP) * scale).round() as i32,
+    )
+}
+
 /// Shows the dictation overlay at its last dragged spot, or centered near the
 /// bottom without taking focus if it was never dragged (or that spot's
 /// monitor is no longer connected).
@@ -669,7 +691,16 @@ fn show_overlay_now(app: &AppHandle, w: &WebviewWindow) {
     MINI.store(wants_mini(app), Ordering::Relaxed);
     let _ = w.set_size(overlay_window_size());
     let pos = match (saved.overlay_x, saved.overlay_y) {
-        (Some(x), Some(y)) if on_any_monitor(w, x, y) => Some(card_on_screen(w, x, y)),
+        (Some(x), Some(y)) if on_any_monitor(w, x, y) => {
+            let (cx, cy) = card_on_screen(w, x, y);
+            // Sideways-only: back on the bottom edge, whatever y was saved.
+            let cy = if saved.overlay_horizontal_only {
+                docked_y(w, cx, cy).unwrap_or(cy)
+            } else {
+                cy
+            };
+            Some((cx, cy))
+        }
         _ => default_overlay_position(w),
     };
     if let Some((x, y)) = pos {

@@ -10,7 +10,7 @@ There are **25 commands**.
 | Command | Args | Returns | Notes |
 |---|---|---|---|
 | `get_settings` | — | `Settings` | |
-| `save_settings` | `settings: Settings` | `Settings` | Sanitizes and saves. Re-applies the overlay layout when `overlayLayouts` changed. Keeps `overlayX/Y`, `overlayPinned`, `overlayMini`, `overlayMiniWidth` and `modelsDir` (owned by dragging, the overlay commands and `models_set_dir`). Unloads the recognizer when `model` or `device` changed, re-registers the hotkey when `shortcut` changed, updates the autostart entry when `startWithOs` changed. Emits `settings://changed` and `gpu://changed`. |
+| `save_settings` | `settings: Settings` | `Settings` | Sanitizes and saves. Re-applies the overlay layout when `overlayLayouts` or `overlayHorizontalOnly` changed. Keeps `overlayX/Y`, `overlayPinned`, `overlayMini`, `overlayMiniWidth` and `modelsDir` (owned by dragging, the overlay commands and `models_set_dir`). Unloads the recognizer when `model` or `device` changed, re-registers the hotkey when `shortcut` changed, updates the autostart entry when `startWithOs` changed. Emits `settings://changed` and `gpu://changed`. |
 | `shortcut_errors` | — | `string[]` | Registration failures from the last `register_all`. |
 | `shortcuts_capture` | `capturing: bool`, `reviewShortcuts?: bool` | `()` | `true` releases all global shortcuts (settings is recording a new one) or, with `reviewShortcuts`, swaps in the review keys; `false` re-registers the normal ones. |
 | `app_info` | — | `AppInfo` | version, paths, NVIDIA info, current and default models folder. |

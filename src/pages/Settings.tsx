@@ -513,7 +513,13 @@ export function SettingsPage() {
           <Row label="Lock the small overlay's size" hint="Off: drag the right edge of the small overlay to change its width (double-click the edge to reset it)." htmlFor="sw-lock">
             <Switch id="sw-lock" label="Lock the small overlay's size" checked={settings.overlaySizeLocked} onChange={(v) => set((d) => void (d.overlaySizeLocked = v))} />
           </Row>
-          <Row label="Overlay position" hint="Drag the overlay by its header to move it.">
+          <Row label="Move sideways only" hint="The overlay slides left and right and stays just above the taskbar." htmlFor="sw-side">
+            <Switch id="sw-side" label="Move sideways only" checked={settings.overlayHorizontalOnly} onChange={(v) => set((d) => void (d.overlayHorizontalOnly = v))} />
+          </Row>
+          <Row label="Lock the overlay position" hint="Stops the overlay from being dragged." htmlFor="sw-poslock">
+            <Switch id="sw-poslock" label="Lock the overlay position" checked={settings.overlayPositionLocked} onChange={(v) => set((d) => void (d.overlayPositionLocked = v))} />
+          </Row>
+          <Row label="Overlay position" hint="Drag the overlay by its header to move it (unless the position is locked).">
             <button className="btn btn-sm" onClick={() => setConfirmPosition(true)}>
               <RotateCcw size={13} /> Reset position
             </button>

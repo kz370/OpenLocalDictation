@@ -368,6 +368,10 @@ html.overlay {
   cursor: move;
 }
 
+.overlay-head.locked {
+  cursor: default;
+}
+
 .overlay-icon {
   display: grid;
   place-items: center;

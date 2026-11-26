@@ -11,6 +11,7 @@ const EN: Record<string, string> = {
   "overlay.cancelled": "Cancelled",
   "overlay.copyHint": "Copy reviewed text to the clipboard",
   "overlay.correcting": "Working…",
+  "overlay.dragHintSideways": "Drag sideways to move · double-click to reset position",
   "overlay.dragHint": "Drag to move · double-click to reset position",
   "overlay.empty": "No speech detected",
   "overlay.error": "Dictation failed",

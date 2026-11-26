@@ -13,7 +13,7 @@ import { VoiceBars } from "../components/VoiceBars";
  * Alt locks to vertical-only. Uses manual `setPosition` (not Tauri's
  * `startDragging`, which hands off to the OS and can't be axis-constrained
  * mid-drag), throttled to one IPC call per frame. */
-function useOverlayDrag() {
+function useOverlayDrag(horizontalOnly: boolean, locked: boolean) {
   const drag = useRef<{ startX: number; startY: number; winX: number; winY: number; frame: number | null; pending: { x: number; y: number } | null } | null>(null);
 
   const flush = () => {
@@ -28,7 +28,7 @@ function useOverlayDrag() {
 
   return {
     onPointerDown: (e: React.PointerEvent) => {
-      if (e.button !== 0) return;
+      if (e.button !== 0 || locked) return;
       // Without capture, the browser stops delivering move events to this
       // element the instant the (async) window move puts the cursor even
       // slightly outside its bounds — the drag would visually never start.
@@ -47,8 +47,8 @@ function useOverlayDrag() {
       const scale = window.devicePixelRatio || 1;
       let dx = Math.round((e.screenX - d.startX) * scale);
       let dy = Math.round((e.screenY - d.startY) * scale);
-      if (e.shiftKey) dy = 0;
-      if (e.altKey) dx = 0;
+      if (e.shiftKey || horizontalOnly) dy = 0;
+      if (e.altKey && !horizontalOnly) dx = 0;
       d.pending = { x: d.winX + dx, y: d.winY + dy };
       if (d.frame == null) d.frame = requestAnimationFrame(flush);
     },
@@ -332,7 +332,9 @@ export function Overlay() {
   const reviewReadyRef = useRef(false);
   const draftRef = useRef("");
   const draftDirty = useRef(false);
-  const drag = useOverlayDrag();
+  const horizontalOnly = useSettings((s) => s.settings?.overlayHorizontalOnly ?? true);
+  const positionLocked = useSettings((s) => s.settings?.overlayPositionLocked ?? false);
+  const drag = useOverlayDrag(horizontalOnly, positionLocked);
 
   useEffect(() => {
     document.documentElement.classList.add("overlay");
@@ -656,12 +658,12 @@ export function Overlay() {
       {/* Header: what is happening, the language, and close. Drag to move;
           double-click puts the overlay back in its default spot. */}
       <div
-        className="overlay-head"
-        title={t("overlay.dragHint")}
+        className={`overlay-head${positionLocked ? " locked" : ""}`}
+        title={positionLocked ? undefined : t(horizontalOnly ? "overlay.dragHintSideways" : "overlay.dragHint")}
         onPointerDown={drag.onPointerDown}
         onPointerMove={drag.onPointerMove}
         onPointerUp={drag.onPointerUp}
-        onDoubleClick={() => void ipc.dictationResetOverlayPosition().catch(quiet)}
+        onDoubleClick={() => (positionLocked ? undefined : void ipc.dictationResetOverlayPosition().catch(quiet))}
       >
         <span className="overlay-icon">{icon}</span>
         {miniView && listening && <VoiceBars bands={bands} level={level} label={t("voice.level")} />}

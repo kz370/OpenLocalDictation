@@ -53,7 +53,9 @@ pub fn save_settings(
             tracing::warn!(error = %e, "could not change the autostart entry");
         }
     }
-    if saved.overlay_layouts != before.overlay_layouts {
+    if saved.overlay_layouts != before.overlay_layouts
+        || saved.overlay_horizontal_only != before.overlay_horizontal_only
+    {
         window::refresh_overlay_layout(&app);
     }
     let _ = app.emit("settings://changed", &saved);

@@ -32,6 +32,10 @@ export interface Settings {
   overlayOpacity: number;
   /** Settings (gear) button in the overlay header. */
   overlayShowSettings: boolean;
+  /** Overlay drags sideways only, staying above the taskbar. */
+  overlayHorizontalOnly: boolean;
+  /** Overlay cannot be dragged. */
+  overlayPositionLocked: boolean;
   overlayLayouts: "small" | "large" | "both";
   /** Small overlay width in logical px (320-800). */
   overlayMiniWidth: number;

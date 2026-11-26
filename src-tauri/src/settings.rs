@@ -57,6 +57,10 @@ pub struct Settings {
     pub overlay_opacity: u32,
     /// Show the settings button in the overlay header.
     pub overlay_show_settings: bool,
+    /// The overlay can only be dragged sideways; it stays just above the taskbar.
+    pub overlay_horizontal_only: bool,
+    /// The overlay cannot be dragged at all.
+    pub overlay_position_locked: bool,
     /// Width of the small overlay in logical px (dragged on its right edge).
     pub overlay_mini_width: u32,
     /// Locks the small overlay's width: no resize handle.
@@ -89,6 +93,8 @@ impl Default for Settings {
             overlay_layouts: "small".into(),
             overlay_opacity: 100,
             overlay_show_settings: true,
+            overlay_horizontal_only: true,
+            overlay_position_locked: false,
             overlay_mini_width: 400,
             overlay_size_locked: false,
         }

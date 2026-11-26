@@ -44,3 +44,4 @@ Files Processed: 65 — COMPLETE
 - [2026-11-27T01:00:00Z] New setting overlayOpacity (30-100, default 100) with a slider in Settings > Overlay; applies to the overlay card and bubble background.
 - [2026-11-27T01:20:00Z] Overlay header gear button (settings_open) in both layouts; overlayShowSettings option hides it.
 - [2026-11-27T01:40:00Z] Settings title bar and header brand mark now show the app icon (public/app-icon.png) instead of a drawn mic glyph.
+- [2026-11-27T02:00:00Z] Overlay position options: overlayHorizontalOnly (default on) and overlayPositionLocked, in Settings > Overlay.
