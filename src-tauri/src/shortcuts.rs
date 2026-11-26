@@ -161,6 +161,26 @@ pub fn start_dictation(app: &AppHandle) {
         + 1;
     // A fresh session owns the cancel flag (clears a stale Esc).
     state.dictation_cancel.store(false, Ordering::Relaxed);
+    // No microphone to listen to: say so and stay idle (nothing is started).
+    let mic_status = crate::mic::check(state.settings.get().microphone.as_deref());
+    if !mic_status.is_ok() {
+        let code = match mic_status {
+            crate::mic::MicStatus::Muted => "mic_muted",
+            crate::mic::MicStatus::Blocked => "mic_blocked",
+            _ => "mic_missing",
+        };
+        tracing::info!(code, "dictation not started: no usable microphone");
+        window::show_overlay(app);
+        crate::emit_state(
+            app,
+            serde_json::json!({
+                "state": "error",
+                "error": { "code": code, "detail": mic_status.problem().unwrap_or_default() }
+            }),
+        );
+        crate::hide_overlay_later(app, crate::LINGER_MSG_MS);
+        return;
+    }
     window::remember_target(app);
     match state.voice.start() {
         Ok(_) => {
@@ -169,10 +189,7 @@ pub fn start_dictation(app: &AppHandle) {
         }
         Err(e) => {
             window::show_overlay(app);
-            let _ = app.emit(
-                "dictation://state",
-                serde_json::json!({"state": "error", "error": e}),
-            );
+            crate::emit_state(app, serde_json::json!({"state": "error", "error": e}));
             crate::hide_overlay_later(app, crate::LINGER_MSG_MS);
         }
     }

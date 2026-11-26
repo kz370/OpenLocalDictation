@@ -25,6 +25,8 @@ Settings (settings.rs, stored in <data>\settings.json; unknown/missing fields fa
   overlayOrbShift      i32      0                       bubble style: mic circle offset from the window center, logical px (clamped -2000..2000)
   overlaySizeLocked    bool     false                   no resize handle on the small overlay
   overlayStyle         string   "pill"                  small overlay look: pill | bubble (mic circle, pill above on hover/use)
+  taskbarWidget        bool     false                   mic button inside the Windows taskbar (bottom taskbar only); the pill opens above it, and the app's own floating circle/pill is not shown while it is on
+  taskbarWidgetX       i32?     null                    taskbar button position: logical px from the taskbar's left edge; null until first placed, then fixed (set by dragging or by the first default placement), clamped 0 .. 16000
   overlayHorizontalOnly bool    true                    overlay drags sideways only and stays just above the taskbar (y is re-docked on show)
   overlayPositionLocked bool    false                   overlay cannot be dragged
   overlayShowSettings  bool     true                    gear button in the overlay header
@@ -84,3 +86,12 @@ Constants
   Typing: 16 ms per character (measured; faster drops characters), review focus delay 150 ms.
   Overlay card 480 x 176 logical px; menu room 240 px above/below; settings window 780 x 656.
   Overlay linger after a take: 800 ms (inserted), 2200 ms (message).
+
+TaskbarStatus (event taskbar://status, command taskbar_widget_status)
+  shown   bool      the button is on the taskbar
+  reason  string?   why not: not a bottom taskbar, taskbar not found or not recognised
+
+taskbar::Anchor (Rust only)
+  center_x, center_y  i32   button center, physical px
+  top                 i32   taskbar top edge
+  scale               f64   DPI scale of the taskbar's monitor

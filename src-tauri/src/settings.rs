@@ -72,6 +72,12 @@ pub struct Settings {
     /// shown) | "bubble" (a mic circle; the pill shows above it on hover and
     /// while dictating).
     pub overlay_style: String,
+    /// Show a mic button inside the Windows taskbar (bottom taskbar only). The
+    /// pill then opens above it instead of above a floating circle.
+    pub taskbar_widget: bool,
+    /// Where the taskbar button sits: logical px from the taskbar's left edge.
+    /// `None` until it was first placed; then fixed until the user drags it.
+    pub taskbar_widget_x: Option<i32>,
 }
 
 impl Default for Settings {
@@ -106,6 +112,8 @@ impl Default for Settings {
             overlay_orb_shift: 0,
             overlay_size_locked: false,
             overlay_style: "pill".into(),
+            taskbar_widget: false,
+            taskbar_widget_x: None,
         }
     }
 }
@@ -150,6 +158,7 @@ impl Settings {
             .overlay_mini_width
             .clamp(MINI_MIN_WIDTH, MINI_MAX_WIDTH);
         self.overlay_orb_shift = self.overlay_orb_shift.clamp(-2000, 2000);
+        self.taskbar_widget_x = self.taskbar_widget_x.map(|x| x.clamp(0, 16_000));
         self.vad_threshold = self.vad_threshold.clamp(0.2, 0.95);
         self.silence_ms = self.silence_ms.clamp(300, 3000);
         self.auto_stop_silence_secs = self.auto_stop_silence_secs.min(120);
@@ -235,6 +244,19 @@ mod tests {
         assert_eq!(s.device, "gpu");
         assert_eq!(s.silence_ms, 300);
         assert_eq!(s.language, "auto");
+    }
+
+    #[test]
+    fn taskbar_widget_is_off_by_default_and_position_is_clamped() {
+        let mut s = Settings::default();
+        assert!(!s.taskbar_widget);
+        assert_eq!(s.taskbar_widget_x, None);
+        s.taskbar_widget_x = Some(-50);
+        s.sanitize();
+        assert_eq!(s.taskbar_widget_x, Some(0));
+        s.taskbar_widget_x = Some(99_999);
+        s.sanitize();
+        assert_eq!(s.taskbar_widget_x, Some(16_000));
     }
 
     #[test]

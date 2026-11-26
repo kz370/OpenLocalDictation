@@ -423,6 +423,20 @@ html.overlay {
   border-radius: 50%;
 }
 
+/* Anchored to the taskbar button: it is the circle, so this one draws
+   nothing and plays no zoom; the pill pops out of the button by itself. */
+.overlay-card.mini.anchored {
+  background: none;
+  border-color: transparent;
+  box-shadow: none;
+}
+
+.overlay-card.mini.anchored.pop-1,
+.overlay-card.mini.anchored.pop-2,
+.overlay-card.mini.anchored.closing {
+  animation: none;
+}
+
 /* The circle only drags while Ctrl is held (see .grab below), so at rest it
    makes no promise of one: the mic button inside keeps its own pointer. */
 .overlay-orb {
@@ -699,6 +713,10 @@ html.dragging * {
 }
 
 .overlay-label.app {
+  max-width: 240px;
+  /* Italic glyphs lean past their box, and the label clips its overflow
+     (ellipsis): without room on the right the last letter is cut off. */
+  padding: 0 4px 0 2px;
   font-style: italic;
   font-weight: 500;
   color: var(--accent);

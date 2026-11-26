@@ -9,6 +9,7 @@ flowchart TB
     LIB[lib.rs dictation flow]
     SC[shortcuts.rs]
     WIN[window.rs]
+    TB[taskbar.rs widget thread]
     VS[stt/session.rs VoiceSessions]
     SS[stt/mod.rs SttService]
     EN[stt/engine.rs]
@@ -27,6 +28,9 @@ flowchart TB
   ST --> IPC
   IPC -- invoke / events --> CMD
   CMD --> LIB
+  LIB --> TB
+  TB --> W32
+  WIN --> TB
   CMD --> MD
   CMD --> GP
   CMD --> SE

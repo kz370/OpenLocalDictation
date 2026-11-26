@@ -2,7 +2,7 @@
 
 import { invoke } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
-import type { AppErrorPayload, AppInfo, AudioDevice, GpuStatus, ModelEntry, Settings } from "./types";
+import type { AppErrorPayload, AppInfo, AudioDevice, GpuStatus, ModelEntry, Settings, TaskbarStatus } from "./types";
 
 export function isAppError(e: unknown): e is AppErrorPayload {
   return typeof e === "object" && e !== null && "code" in e && "detail" in e;
@@ -51,6 +51,9 @@ export const ipc = {
   dictationOverlayCard: (shapes: [number, number, number, number][] | null) => invoke<void>("dictation_overlay_card", { shapes }),
   dictationOverlayBubble: (bubble: [number, number, number, number] | null) => invoke<void>("dictation_overlay_bubble", { bubble }),
   dictationOverlayMenu: (menu: [number, number, number, number] | null) => invoke<void>("dictation_overlay_menu", { menu }),
+  overlayHideIdle: () => invoke<void>("overlay_hide_idle"),
+  taskbarWidgetStatus: () => invoke<TaskbarStatus>("taskbar_widget_status"),
+  taskbarWidgetResetPosition: () => invoke<void>("taskbar_widget_reset_position"),
 };
 
 /** Subscribes to a backend event; resolves to the unsubscribe function. */

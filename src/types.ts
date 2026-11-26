@@ -45,6 +45,16 @@ export interface Settings {
   overlaySizeLocked: boolean;
   /** Small overlay look: one pill with the mic, or a mic bubble with the pill above it on hover. */
   overlayStyle: "pill" | "bubble";
+  /** Mic button inside the Windows taskbar; the pill opens above it. */
+  taskbarWidget: boolean;
+  /** Where the taskbar button sits, logical px from the taskbar's left edge (null until first placed). */
+  taskbarWidgetX: number | null;
+}
+
+/** Whether the taskbar button is on the taskbar and, if not, why. */
+export interface TaskbarStatus {
+  shown: boolean;
+  reason: string | null;
 }
 
 export interface AppInfo {

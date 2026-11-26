@@ -61,12 +61,28 @@ commands::app_restart | calls | tray::quit
 tray::create | calls | shortcuts::toggle_dictation
 tray::create | calls | window::open_settings
 autostart::set_enabled | calls | gpu::launcher_exe
+lib::start_taskbar_widget | calls | taskbar::start
+lib::start_taskbar_widget | calls | shortcuts::toggle_dictation
+lib::start_taskbar_widget | calls | window::show_idle_overlay
+lib::emit_state | calls | taskbar::set_state
+lib::start_mic_watch | calls | mic::check
+lib::start_mic_watch | calls | taskbar::set_mic_ok
+lib::start_mic_watch | calls | tray::set_mic_status
+shortcuts::start_dictation | calls | mic::check
+commands::save_settings | calls | lib::start_taskbar_widget
+commands::save_settings | calls | taskbar::stop
+commands::taskbar_widget_status | calls | taskbar::status
+commands::taskbar_widget_reset_position | calls | taskbar::set_x
+commands::overlay_hide_idle | calls | window::hide_idle_overlay
+window::show_overlay_now | calls | taskbar::anchor
+window::discard_review | calls | taskbar::set_state
+window::cancel_dictation | calls | taskbar::set_state
 
 src/main.tsx | renders | src/pages/Overlay.tsx
 src/main.tsx | renders | src/pages/Settings.tsx
 src/main.tsx | calls | src/settingsStore.ts
 src/pages/Overlay.tsx | calls | src/ipc.ts
-src/pages/Overlay.tsx | listens | dictation://state, dictation://target, dictation://review-shortcut, voice://event, overlay://idle
+src/pages/Overlay.tsx | listens | dictation://state, dictation://target, dictation://review-shortcut, voice://event, overlay://idle, overlay://anchor, overlay://widget-hover
 src/pages/Overlay.tsx | depends_on | src/knownLanguages.ts
 commands::dictation_overlay_card | calls | window::set_overlay_card
 commands::overlay_fit_width | calls | window::resize_overlay_mini

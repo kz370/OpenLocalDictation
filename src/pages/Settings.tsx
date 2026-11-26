@@ -23,6 +23,7 @@ import {
   MousePointerClick,
   Move,
   MoveHorizontal,
+  PanelBottom,
   Palette,
   Pencil,
   PenLine,
@@ -43,7 +44,7 @@ import { ipc, on, toAppError } from "../ipc";
 import { KNOWN_LANGUAGES } from "../knownLanguages";
 import { useSettings } from "../settingsStore";
 import { formatBytes } from "../strings";
-import type { AppErrorPayload, AppInfo, AudioDevice, DownloadProgress, GpuProgress, GpuStatus, ModelEntry, Settings } from "../types";
+import type { AppErrorPayload, AppInfo, AudioDevice, DownloadProgress, GpuProgress, GpuStatus, ModelEntry, Settings, TaskbarStatus } from "../types";
 import { Dialog, ErrorNotice, Segmented, Switch } from "../components/controls";
 import { Card, Row } from "../components/layout";
 import { SearchSelect, type SearchOption } from "../components/SearchSelect";
@@ -396,6 +397,7 @@ export function SettingsPage() {
   const [mics, setMics] = useState<AudioDevice[]>([]);
   const [info, setInfo] = useState<AppInfo | null>(null);
   const [shortcutErrors, setShortcutErrors] = useState<string[]>([]);
+  const [taskbar, setTaskbar] = useState<TaskbarStatus>({ shown: false, reason: null });
 
   useEffect(() => {
     void ipc.audioInputs().then(setMics).catch(() => undefined);
@@ -405,6 +407,12 @@ export function SettingsPage() {
   useEffect(() => {
     void ipc.shortcutErrors().then(setShortcutErrors);
   }, [settings?.shortcut]);
+  // Whether the taskbar button found its place (it can take a moment after the switch).
+  useEffect(() => {
+    void ipc.taskbarWidgetStatus().then(setTaskbar).catch(() => undefined);
+    const sub = on<TaskbarStatus>("taskbar://status", setTaskbar);
+    return () => void sub.then((u) => u());
+  }, []);
 
   if (!settings) return null;
   const set = (m: (d: Settings) => void) => void update(m);
@@ -522,6 +530,16 @@ export function SettingsPage() {
 
         {tab === "overlay" && (
         <Card title="Overlay" icon={<PictureInPicture2 size={16} />}>
+          <Row label="Mic button in the taskbar" icon={<PanelBottom size={16} />} hint="Click to dictate, point at it to open the pill. Drag it to move it along the taskbar. Needs a taskbar at the bottom of the screen." htmlFor="sw-taskbar">
+            <Switch id="sw-taskbar" label="Mic button in the taskbar" checked={settings.taskbarWidget} onChange={(v) => set((d) => void (d.taskbarWidget = v))} />
+          </Row>
+          {settings.taskbarWidget && (
+            <Row label="Taskbar button position" icon={<Move size={16} />} hint={taskbar.shown ? "The button stays where you put it. Drag it to move it; reset puts it left of the notification area." : (taskbar.reason ?? "Placing the button…")}>
+              <button className="btn btn-sm" onClick={() => void ipc.taskbarWidgetResetPosition()}>
+                <RotateCcw size={13} /> Reset position
+              </button>
+            </Row>
+          )}
           <Row label="Pin the overlay" icon={<Pin size={16} />} hint="Keeps the overlay on screen, always on top of other apps. It listens to nothing until you press the shortcut or its mic button." htmlFor="sw-pin">
             <Switch id="sw-pin" label="Pin the overlay" checked={settings.overlayPinned} onChange={(v) => void ipc.overlaySetPinned(v)} />
           </Row>

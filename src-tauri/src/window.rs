@@ -129,9 +129,81 @@ fn card_dims() -> (f64, f64) {
 }
 
 /// Small layout wanted right now. Review stays small too: its editor floats
-/// above the pill.
+/// above the pill. Anchored to the taskbar button the overlay is always the
+/// small bubble's pill.
 fn wants_mini(app: &AppHandle) -> bool {
-    app.state::<AppState>().settings.get().effective_mini()
+    taskbar_anchor(app).is_some() || app.state::<AppState>().settings.get().effective_mini()
+}
+
+/// Where the taskbar button is, while the setting is on and the button is on
+/// the taskbar. The overlay's pill then opens above it.
+fn taskbar_anchor(app: &AppHandle) -> Option<crate::taskbar::Anchor> {
+    if app.state::<AppState>().settings.get().taskbar_widget {
+        crate::taskbar::anchor()
+    } else {
+        None
+    }
+}
+
+/// Bubble layout of the page (Overlay.tsx `ORB_TOP`, `ORB_GAP`): the circle's
+/// top is this far below the card box's top, the pill sits this far above it.
+const ORB_TOP: f64 = 12.0;
+const ORB_GAP: f64 = 6.0;
+/// Clear space between the pill and the taskbar's top edge (logical px).
+const TASKBAR_GAP: f64 = 8.0;
+
+/// Window position (physical px) that puts the pill just above the taskbar
+/// button, centered on it and kept inside the work area, and the button's
+/// center in the window (logical px) for the pill's pop-out origin.
+/// `area` is the work area (x, y, w, h), `win_w` the window's width.
+fn anchored_geometry(
+    area: (i32, i32, u32, u32),
+    a: &crate::taskbar::Anchor,
+    win_w: i32,
+) -> ((i32, i32), (f64, f64)) {
+    let scale = a.scale;
+    let x = clamp_into(
+        (area.0, area.1),
+        (area.2, area.3),
+        (a.center_x - win_w / 2, area.1),
+        (win_w as u32, 0),
+    )
+    .0;
+    // The invisible circle's top sits where the pill's bottom plus the gap is.
+    let orb_top = a.top as f64 - TASKBAR_GAP * scale + ORB_GAP * scale;
+    let y = (orb_top - (MENU_ROOM + ORB_TOP) * scale).round() as i32;
+    let origin = (
+        (a.center_x - x) as f64 / scale,
+        (a.center_y - y) as f64 / scale,
+    );
+    ((x, y), origin)
+}
+
+fn anchored_position(
+    w: &WebviewWindow,
+    a: &crate::taskbar::Anchor,
+) -> Option<((i32, i32), (f64, f64))> {
+    let m = w.primary_monitor().ok().flatten()?;
+    let area = m.work_area();
+    let (lw, _) = card_dims();
+    Some(anchored_geometry(
+        (
+            area.position.x,
+            area.position.y,
+            area.size.width,
+            area.size.height,
+        ),
+        a,
+        (lw * a.scale).round() as i32,
+    ))
+}
+
+/// Gives keyboard focus to the overlay (the review editor).
+pub fn focus_overlay(app: &AppHandle) {
+    focus_hwnd(overlay_hwnd(app));
+    if let Some(w) = app.get_webview_window(OVERLAY) {
+        let _ = w.set_focus();
+    }
 }
 
 #[cfg(windows)]
@@ -606,6 +678,7 @@ pub fn discard_review(app: &AppHandle) -> bool {
         set_overlay_review(app, false);
         restore_target(app);
         state.dictation_busy.store(false, Ordering::Relaxed);
+        crate::taskbar::set_state(crate::taskbar::WidgetState::Idle);
     }
     had
 }
@@ -728,7 +801,11 @@ fn show_overlay_now(app: &AppHandle, w: &WebviewWindow) {
     MINI_WIDTH.store(saved.overlay_mini_width, Ordering::Relaxed);
     MINI.store(wants_mini(app), Ordering::Relaxed);
     let _ = w.set_size(overlay_window_size());
+    // Anchored to the taskbar button: the pill opens above it and the window
+    // is not draggable, so no saved spot applies.
+    let anchored = taskbar_anchor(app).and_then(|a| anchored_position(w, &a));
     let pos = match (saved.overlay_x, saved.overlay_y) {
+        _ if anchored.is_some() => None,
         (Some(x), Some(y)) if on_any_monitor(w, x, y) => {
             let (cx, cy) = card_on_screen(w, x, y);
             // Sideways-only: back on the bottom edge, whatever y was saved.
@@ -741,13 +818,30 @@ fn show_overlay_now(app: &AppHandle, w: &WebviewWindow) {
         }
         _ => default_overlay_position(w),
     };
-    if let Some((x, y)) = pos {
-        let _ = w.set_position(PhysicalPosition::new(x, y - room_px(w)));
+    if let Some(((x, y), (ax, ay))) = anchored {
+        let _ = w.set_position(PhysicalPosition::new(x, y));
+        let _ = app.emit_to(
+            OVERLAY,
+            "overlay://anchor",
+            serde_json::json!({ "x": ax, "y": ay }),
+        );
+    } else {
+        if let Some((x, y)) = pos {
+            let _ = w.set_position(PhysicalPosition::new(x, y - room_px(w)));
+        }
+        let _ = app.emit_to(OVERLAY, "overlay://anchor", serde_json::Value::Null);
     }
     let was_visible = w.is_visible().unwrap_or(false);
     // A zoom-out still playing is cancelled; the page must come back.
     HIDE_TOKEN.fetch_add(1, Ordering::SeqCst);
     let interrupted = HIDE_PENDING.swap(false, Ordering::SeqCst);
+    if anchored.is_some() {
+        // Nothing of the window is visible until the page has sent the pill's
+        // shape (it does so on the anchor event): clip it to nothing *before*
+        // it is shown, or its whole transparent box flashes for a frame.
+        *CARD_RECTS.lock().unwrap_or_else(|p| p.into_inner()) = Some(Vec::new());
+    }
+    set_overlay_region(app, w, true);
     let _ = w.show();
     // After showing: that re-adds the frame styles the region needs gone.
     set_overlay_region(app, w, true);
@@ -810,6 +904,22 @@ pub fn show_idle_overlay(app: &AppHandle) {
         }
         show_overlay_now(&app2, &w);
         let _ = app2.emit_to(OVERLAY, "overlay://idle", ());
+    });
+}
+
+/// Hides the overlay if nothing is being dictated: the taskbar button's hover
+/// pill, once the pointer has left it.
+pub fn hide_idle_overlay(app: &AppHandle) {
+    let Some(w) = app.get_webview_window(OVERLAY) else {
+        return;
+    };
+    let app2 = app.clone();
+    on_main(app, move || {
+        let state = app2.state::<AppState>();
+        if state.voice.is_active() || state.dictation_busy.load(Ordering::Relaxed) {
+            return;
+        }
+        hide_overlay_window(&app2, &w);
     });
 }
 
@@ -877,7 +987,7 @@ fn overlay_hide_is_current_and_idle(
 /// Pinned overlays never hide: they fall back to their idle card (the page
 /// resets itself on `overlay://idle`). Nothing is listened to while idle.
 fn hide_overlay_window(app: &AppHandle, w: &WebviewWindow) {
-    if app.state::<AppState>().settings.get().overlay_pinned {
+    if app.state::<AppState>().settings.get().overlay_pinned && taskbar_anchor(app).is_none() {
         show_overlay_now(app, w);
         let _ = app.emit_to(OVERLAY, "overlay://idle", ());
         return;
@@ -930,5 +1040,51 @@ pub fn cancel_dictation(app: &AppHandle) {
             state.voice.stop(true);
         }
     }
+    crate::taskbar::set_state(crate::taskbar::WidgetState::Idle);
     hide_overlay(app);
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::taskbar::Anchor;
+
+    fn anchor(center_x: i32) -> Anchor {
+        Anchor {
+            center_x,
+            center_y: 1176,
+            top: 1152,
+            scale: 1.0,
+        }
+    }
+
+    #[test]
+    fn pill_is_centered_on_the_button_and_sits_above_the_taskbar() {
+        let area = (0, 0, 1920, 1152);
+        let ((x, y), (ax, ay)) = anchored_geometry(area, &anchor(1000), 400);
+        assert_eq!(x, 800);
+        // The window's orb row sits ORB_TOP + room below its top.
+        assert_eq!(y, (1152.0 - 8.0 + 6.0 - (MENU_ROOM + ORB_TOP)) as i32);
+        // The button is at the window's horizontal middle and below its top.
+        assert_eq!(ax, 200.0);
+        assert!(ay > MENU_ROOM);
+    }
+
+    #[test]
+    fn pill_shifts_sideways_near_the_screen_edge() {
+        let area = (0, 0, 1920, 1152);
+        let ((x, _), (ax, _)) = anchored_geometry(area, &anchor(100), 400);
+        assert_eq!(x, 0);
+        assert_eq!(ax, 100.0);
+        let ((x, _), (ax, _)) = anchored_geometry(area, &anchor(1900), 400);
+        assert_eq!(x, 1520);
+        assert_eq!(ax, 380.0);
+    }
+
+    #[test]
+    fn hide_is_only_for_the_current_idle_session() {
+        assert!(overlay_hide_is_current_and_idle(3, 3, false, false));
+        assert!(!overlay_hide_is_current_and_idle(2, 3, false, false));
+        assert!(!overlay_hide_is_current_and_idle(3, 3, true, false));
+    }
 }

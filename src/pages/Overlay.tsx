@@ -182,7 +182,9 @@ function rowWidth(row: Element | undefined): number {
   let sum = PILL_GAP * Math.max(0, items.length - 1);
   for (const el of items) {
     const s = getComputedStyle(el);
-    sum += px(s.flexShrink) > 0 ? px(s.minWidth) : el.getBoundingClientRect().width;
+    // The destination app's name gets its own width (up to a cap), not the label's floor: it must not be clipped.
+    if (el.classList.contains("app")) sum += Math.min(el.scrollWidth, 240);
+    else sum += px(s.flexShrink) > 0 ? px(s.minWidth) : el.getBoundingClientRect().width;
   }
   return sum;
 }
@@ -505,6 +507,12 @@ export function Overlay() {
   const [bands, setBands] = useState<number[]>([]);
   const [level, setLevel] = useState(0);
   const [langOpen, setLangOpen] = useState(false);
+  // Where the taskbar button is in this window (logical px), while the pill is
+  // anchored to it: the button is the circle, so none is drawn here.
+  const [anchor, setAnchor] = useState<{ x: number; y: number } | null>(null);
+  const anchored = anchor !== null;
+  // Bumped on every show: the window starts each show clipped to nothing, so the page sends its shapes again.
+  const [showTick, setShowTick] = useState(0);
   const openLang = useRef<(() => void) | null>(null);
   // Tooltips of the overlay show inside its header (see TooltipLayer `inline`): the card sits on the taskbar, so a bubble has no room.
   const [hint, setHint] = useState<string | null>(null);
@@ -515,7 +523,7 @@ export function Overlay() {
   const opacity = useSettings((s) => s.settings?.overlayOpacity ?? 100);
   const layouts = useSettings((s) => s.settings?.overlayLayouts ?? "small");
   const miniChoice = useSettings((s) => s.settings?.overlayMini ?? false);
-  const mini = layouts === "small" ? true : layouts === "large" ? false : miniChoice;
+  const mini = anchored || (layouts === "small" ? true : layouts === "large" ? false : miniChoice);
   const sizeLocked = useSettings((s) => s.settings?.overlaySizeLocked ?? false);
   const overlayStyle = useSettings((s) => s.settings?.overlayStyle ?? "pill");
   const shortcut = useSettings((s) => s.settings?.shortcut ?? "");
@@ -528,10 +536,12 @@ export function Overlay() {
   const draftDirty = useRef(false);
   const horizontalOnly = useSettings((s) => s.settings?.overlayHorizontalOnly ?? true);
   const positionLocked = useSettings((s) => s.settings?.overlayPositionLocked ?? false);
-  const bubbleStyle = useSettings((s) => (s.settings?.overlayStyle ?? "pill") === "bubble");
+  const bubbleSetting = useSettings((s) => (s.settings?.overlayStyle ?? "pill") === "bubble");
+  const bubbleStyle = bubbleSetting || anchored;
+  // Anchored to the taskbar button, the overlay is not dragged: the button's offset moves it.
   const drag = useOverlayDrag(
     horizontalOnly,
-    positionLocked,
+    positionLocked || anchored,
     bubbleStyle && mini,
   );
   const headRef = useRef<HTMLDivElement>(null);
@@ -637,6 +647,20 @@ export function Overlay() {
       }),
       // Zoom-out before the window hides.
       on<null>("overlay://hiding", () => setClosing(true)),
+      // The taskbar button's position (null: not anchored to it).
+      on<{ x: number; y: number } | null>("overlay://anchor", (a) => {
+        setAnchor(a);
+        if (a) {
+          sentCard.current = null;
+          setShowTick((n) => n + 1);
+        }
+      }),
+      // The pointer rests on the taskbar button (opens the pill) or left it.
+      on<boolean>("overlay://widget-hover", (h) => {
+        window.clearTimeout(hoverTimer.current);
+        if (h) setHover(true);
+        else hoverTimer.current = window.setTimeout(() => setHover(false), HOVER_CLOSE_MS);
+      }),
       // The window is about to hide: go back to a clean idle page now, while
       // nobody sees it, so the next show starts bare (no stale pill, hover or
       // result) and invisible until its pop-in.
@@ -740,8 +764,18 @@ export function Overlay() {
   const miniView = mini;
   // Bubble style: a mic circle stays on screen; the pill (without the mic)
   // shows above it while dictating, while hovered or while its menu is open.
-  const bubble = miniView && overlayStyle === "bubble";
-  const pillShown = !bubble || !idle || (hover && !ctrlHeld) || langOpen;
+  const bubble = miniView && (overlayStyle === "bubble" || anchored);
+  const pillShown = (!bubble || !idle || (hover && !ctrlHeld) || langOpen) && !(anchored && closing);
+  // The pill opened by pointing at the taskbar button goes again once the
+  // pointer has left both (and no menu is open).
+  const keepPill = hover || langOpen;
+  const keptPill = useRef(false);
+  useEffect(() => {
+    const was = keptPill.current;
+    keptPill.current = keepPill;
+    if (anchored && was && !keepPill && idle) void ipc.overlayHideIdle().catch(quiet);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [keepPill]);
   const pillShownRef = useRef(false);
   const [winW, setWinW] = useState(window.innerWidth);
   useEffect(() => {
@@ -775,18 +809,26 @@ export function Overlay() {
     const pill: [number, number, number, number] = [PILL_INSET, orbTop - ORB_GAP - PILL_H, winW - 2 * PILL_INSET, PILL_H];
     const pillWasShown = pillShownRef.current;
     pillShownRef.current = pillShown;
+    // Anchored, the circle is the taskbar button's, outside this window.
+    const circle: [number, number, number, number][] = anchored ? [] : [orb];
     if (pillShown) {
-      sendCard([orb, pill]);
+      sendCard([...circle, pill]);
       return;
     }
     // Only the pill's removal waits for its fade-out; the circle's shape never does.
     if (!pillWasShown) {
-      sendCard([orb]);
+      sendCard(circle);
       return;
     }
-    const id = window.setTimeout(() => sendCard([orb]), PILL_FADE_MS);
+    const id = window.setTimeout(() => sendCard(circle), PILL_FADE_MS);
     return () => window.clearTimeout(id);
-  }, [bubble, pillShown, winW, sendCard]);
+  }, [bubble, anchored, pillShown, winW, sendCard, showTick]);
+  // Where the pill pops out of: the taskbar button, in the pill's own coordinates.
+  const pillOrigin = anchor
+    ? `${anchor.x - PILL_INSET}px ${
+        anchor.y - ((parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--menu-room")) || 300) + ORB_TOP - ORB_GAP - PILL_H)
+      }px`
+    : undefined;
   // Never leave the window clipped to the bubble when the page goes away.
   useEffect(() => () => void ipc.dictationOverlayCard(null).catch(quiet), []);
   // The pill always fits its header: grow (and save) the width when the
@@ -937,7 +979,7 @@ export function Overlay() {
           {mini ? <Maximize2 size={13} /> : <Minimize2 size={13} />}
         </HeadBtn>
       )}
-      {!(miniView && !idle) && (
+      {!(miniView && !idle) && !anchored && (
         <HeadBtn label={t(pinned ? "overlay.unpin" : "overlay.pin")} onClick={() => void ipc.overlaySetPinned(!pinned).catch(quiet)}>
           {pinned ? <PinOff size={13} /> : <Pin size={13} />}
         </HeadBtn>
@@ -945,7 +987,7 @@ export function Overlay() {
       {/* Idle: closes the window (and unpins it); never quits the app. */}
       <HeadBtn
         label={idle ? t("overlay.close") : `${t("voice.cancel")} (Esc)`}
-        onClick={() => void (idle ? ipc.overlaySetPinned(false) : ipc.dictationCancel()).catch(quiet)}
+        onClick={() => void (idle ? (anchored ? ipc.overlayHideIdle() : ipc.overlaySetPinned(false)) : ipc.dictationCancel()).catch(quiet)}
       >
         <X size={14} />
       </HeadBtn>
@@ -1088,7 +1130,7 @@ export function Overlay() {
 
   return (
     <div
-      className={`overlay-card${state === "inserted" ? " done" : ""}${miniView ? " mini" : ""}${bubble ? " bubble" : ""}${away || !firstReveal ? " away" : ""}${closing ? " closing" : ""}${miniView && pop ? ` pop-${pop}` : ""}`}
+      className={`overlay-card${state === "inserted" ? " done" : ""}${miniView ? " mini" : ""}${bubble ? " bubble" : ""}${anchored ? " anchored" : ""}${away || !firstReveal ? " away" : ""}${closing ? " closing" : ""}${miniView && pop ? ` pop-${pop}` : ""}`}
       role="status"
       aria-live="polite"
       onPointerEnter={hoverIn}
@@ -1117,8 +1159,9 @@ export function Overlay() {
       {bubble ? (
         <>
           {/* The circle: state icon and mic button; drags the overlay. A
-              right click shows the pill. */}
-          <div
+              right click shows the pill. Anchored to the taskbar button, the
+              button is the circle and none is drawn. */}
+          {!anchored && <div
             className={`overlay-orb${positionLocked ? " locked" : ""}${ctrlHeld && !positionLocked ? " grab" : ""}`}
             {...orbDragProps}
             onContextMenu={(e) => {
@@ -1133,8 +1176,8 @@ export function Overlay() {
             }}
           >
             {icon}
-          </div>
-          <div className={`overlay-pill${pillShown ? " shown" : ""}`} aria-hidden={!pillShown}>
+          </div>}
+          <div className={`overlay-pill${pillShown ? " shown" : ""}`} aria-hidden={!pillShown} style={pillOrigin ? { transformOrigin: pillOrigin } : undefined}>
             {resizeEdge}
             {sub}
             {/* The drawn pill; it pops out of the circle. */}

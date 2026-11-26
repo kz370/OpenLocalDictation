@@ -6,7 +6,7 @@ use crate::gpu::{self, GpuStatus};
 use crate::models::{self, ModelEntry};
 use crate::settings::Settings;
 use crate::state::{AppPaths, AppState};
-use crate::{autostart, shortcuts, window};
+use crate::{autostart, shortcuts, taskbar, window};
 use serde::Serialize;
 use tauri::{AppHandle, Emitter, Manager, State};
 
@@ -35,7 +35,10 @@ pub fn save_settings(
         // Pin and mini are owned by the overlay commands, like the position.
         let (pinned, mini, mini_w) = (s.overlay_pinned, s.overlay_mini, s.overlay_mini_width);
         let orb_shift = s.overlay_orb_shift;
+        // The taskbar button's position is set by dragging it, like the overlay's.
+        let widget_x = s.taskbar_widget_x;
         *s = settings;
+        s.taskbar_widget_x = widget_x;
         s.models_dir = dir;
         s.overlay_x = x;
         s.overlay_y = y;
@@ -60,6 +63,14 @@ pub fn save_settings(
         || saved.overlay_horizontal_only != before.overlay_horizontal_only
     {
         window::refresh_overlay_layout(&app);
+    }
+    if saved.taskbar_widget != before.taskbar_widget {
+        if saved.taskbar_widget {
+            crate::start_taskbar_widget(&app);
+        } else {
+            taskbar::stop();
+            window::sync_overlay_pin(&app);
+        }
     }
     let _ = app.emit("settings://changed", &saved);
     let _ = app.emit("gpu://changed", ());
@@ -434,8 +445,8 @@ pub fn dictation_insert_now(app: AppHandle, state: State<'_, AppState>, text: St
     if state.voice.is_active() {
         if state.settings.get().review_before_insert && !text.trim().is_empty() {
             window::set_overlay_review(&app, true);
-            let _ = app.emit(
-                "dictation://state",
+            crate::emit_state(
+                &app,
                 serde_json::json!({
                     "state": "reviewing",
                     "text": text,
@@ -588,4 +599,28 @@ pub fn dictation_overlay_bubble(app: AppHandle, bubble: Option<[f64; 4]>) {
 #[tauri::command]
 pub fn dictation_overlay_menu(app: AppHandle, menu: Option<[f64; 4]>) {
     window::set_overlay_menu(&app, menu);
+}
+
+/// Whether the taskbar button is on the taskbar and, if not, why (for the
+/// Settings line). Changes arrive as `taskbar://status`.
+#[tauri::command]
+pub fn taskbar_widget_status() -> taskbar::Status {
+    taskbar::status()
+}
+
+/// Forgets where the taskbar button was put: it goes back to the default
+/// spot beside the notification area, which becomes its position again.
+#[tauri::command]
+pub fn taskbar_widget_reset_position(app: AppHandle, state: State<'_, AppState>) -> CmdResult<()> {
+    let saved = state.settings.update(|s| s.taskbar_widget_x = None)?;
+    taskbar::set_x(None);
+    let _ = app.emit("settings://changed", &saved);
+    Ok(())
+}
+
+/// Closes the idle overlay the taskbar button's hover opened, once the pointer
+/// has left both. A running dictation is left alone.
+#[tauri::command]
+pub fn overlay_hide_idle(app: AppHandle) {
+    window::hide_idle_overlay(&app);
 }

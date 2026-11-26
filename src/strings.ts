@@ -56,6 +56,9 @@ const EN: Record<string, string> = {
 /** What went wrong and how to fix it, by backend error code. */
 const ERRORS: Record<string, string> = {
   stt_unavailable: "No speech model is ready. Open Settings and download Whisper tiny, base or small.",
+  mic_missing: "No microphone connected. Plug one in or enable it in Sound settings.",
+  mic_muted: "The microphone is muted. Unmute it in Sound settings.",
+  mic_blocked: "Windows blocks the microphone. Allow it in Privacy settings.",
   audio: "The microphone could not be used. Check it in Windows Sound settings, or pick another one in Settings.",
   download: "The download failed. Check your internet connection and try again.",
   invalid: "That input was not valid.",

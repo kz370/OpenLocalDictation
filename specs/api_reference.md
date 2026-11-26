@@ -2,7 +2,7 @@
 
 Frontend wrappers live in `src/ipc.ts` (`ipc.*` for commands, `on()` for events). Every command that
 can fail returns `Result<T, AppError>`; errors reach the UI as `{ code, detail }` (see §4).
-There are **25 commands**.
+There are **28 commands**.
 
 ## 1. Commands
 
@@ -10,7 +10,7 @@ There are **25 commands**.
 | Command | Args | Returns | Notes |
 |---|---|---|---|
 | `get_settings` | — | `Settings` | |
-| `save_settings` | `settings: Settings` | `Settings` | Sanitizes and saves. Re-applies the overlay layout when `overlayLayouts` or `overlayHorizontalOnly` changed. Keeps `overlayX/Y`, `overlayPinned`, `overlayMini`, `overlayMiniWidth` and `modelsDir` (owned by dragging, the overlay commands and `models_set_dir`). Unloads the recognizer when `model` or `device` changed, re-registers the hotkey when `shortcut` changed, updates the autostart entry when `startWithOs` changed. Emits `settings://changed` and `gpu://changed`. |
+| `save_settings` | `settings: Settings` | `Settings` | Sanitizes and saves. Starts or stops the taskbar button when `taskbarWidget` changed; keeps `taskbarWidgetX` (owned by dragging). Re-applies the overlay layout when `overlayLayouts` or `overlayHorizontalOnly` changed. Keeps `overlayX/Y`, `overlayPinned`, `overlayMini`, `overlayMiniWidth` and `modelsDir` (owned by dragging, the overlay commands and `models_set_dir`). Unloads the recognizer when `model` or `device` changed, re-registers the hotkey when `shortcut` changed, updates the autostart entry when `startWithOs` changed. Emits `settings://changed` and `gpu://changed`. |
 | `shortcut_errors` | — | `string[]` | Registration failures from the last `register_all`. |
 | `shortcuts_capture` | `capturing: bool`, `reviewShortcuts?: bool` | `()` | `true` releases all global shortcuts (settings is recording a new one) or, with `reviewShortcuts`, swaps in the review keys; `false` re-registers the normal ones. |
 | `app_info` | — | `AppInfo` | version, paths, NVIDIA info, current and default models folder. |
@@ -58,6 +58,9 @@ There is **no** command that removes the CUDA libraries.
 | `overlay_fit_width` | `width: u32` | `()` | Grows the small overlay to the header width the page measured (logical px, clamped 320-800) and saves `overlayMiniWidth` (emits `settings://changed`). Never shrinks; applies even while `overlaySizeLocked`. |
 | `dictation_overlay_card` | `shapes: [x,y,w,h][]?` | `()` | Small layout only: cuts the card's part of the window region to these fully rounded shapes (logical rects in the window: the bubble style's circle and, while shown, its pill), or lets the card fill its box again (`null`). |
 | `dictation_overlay_bubble` | `bubble: [x,y,w,h]?` | `()` | Adds the small overlay's bubble (live text or review editor) to the window's visible region, kept apart from the language-menu rectangle, or removes it. |
+| `overlay_hide_idle` | - | `()` | Hides the overlay if nothing is being dictated: the hover pill opened by the taskbar button, once the pointer has left both. |
+| `taskbar_widget_status` | - | `TaskbarStatus` | Whether the taskbar button is on the taskbar and, if not, why (Settings line). |
+| `taskbar_widget_reset_position` | - | `()` | Forgets the taskbar button's position (`taskbarWidgetX` = null): it returns to the default spot beside the notification area, which is saved as its position again. Emits `settings://changed`. |
 | `dictation_overlay_menu` | `menu?: [x,y,w,h]` | `()` | Adds the open language menu to the overlay window region (or removes it). |
 
 ## 2. Events (backend → UI)
@@ -68,6 +71,10 @@ There is **no** command that removes the CUDA libraries.
 | `dictation://target` | `{ targetApp }` | all | Friendly name of the window text will go into. |
 | `dictation://review-shortcut` | `"insert" \| "retry" \| "cancel"` | overlay | Review keys pressed while another app has focus. |
 | `overlay://shown` | `()` | overlay | The overlay window was just shown from hidden (or a pending zoom-out was cancelled); the page reveals the card with its pop-in zoom. |
+| `overlay://anchor` | `{ x, y }` or `null` | overlay | Sent before each show: the taskbar button's center in the overlay window (logical px) while the pill is anchored to it (the page draws no circle, forces the small bubble layout and pops the pill out of that point), or `null` when not anchored. |
+| `overlay://widget-hover` | `bool` | overlay | The pointer rested on the taskbar button (`true`, after 300 ms) or left it (`false`). |
+| `mic://status` | `"ok" | "muted" | "missing" | "blocked"` | all | The microphone's usability changed (checked every 2 s by `lib::start_mic_watch`); the tray icon and the taskbar button are red unless `ok`. |
+| `taskbar://status` | `TaskbarStatus` | all | The taskbar button was placed, lost its taskbar (Explorer restart) or cannot be placed. |
 | `overlay://hiding` | `()` | overlay | A close was requested: the page plays a 180 ms zoom-out. The window hides after `CLOSE_ANIM_MS` (210 ms) unless it is shown again meanwhile. |
 | `overlay://hidden` | `()` | overlay | The overlay is about to hide: the page resets to a bare idle card and turns invisible until the next `overlay://shown`. |
 | `voice://event` | `VoiceEvent` | overlay | Only `level` (value + 24 spectrum bands) and `partial` (live text). |
@@ -81,7 +88,7 @@ There is **no** command that removes the CUDA libraries.
 See `data_models.txt` for every payload shape.
 
 ## 4. Error codes
-`stt_unavailable`, `audio`, `download`, `invalid`, `io`, `cancelled`, `other`. The UI maps each to a
+`stt_unavailable`, `mic_missing`, `mic_muted`, `mic_blocked` (no usable microphone: dictation does not start, the overlay shows the warning), `audio`, `download`, `invalid`, `io`, `cancelled`, `other`. The UI maps each to a
 message saying what happened and how to fix it (`src/strings.ts`, `ERRORS`); `detail` is shown under
 "Technical details".
 

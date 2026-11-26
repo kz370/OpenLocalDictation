@@ -8,11 +8,13 @@ pub mod errors;
 pub mod gpu;
 pub mod hardware;
 pub mod logging;
+pub mod mic;
 pub mod models;
 pub mod settings;
 pub mod shortcuts;
 pub mod state;
 pub mod stt;
+pub mod taskbar;
 pub mod tray;
 pub mod typing;
 pub mod window;
@@ -30,6 +32,105 @@ use tauri::{AppHandle, Emitter, Manager};
 /// "Inserted", longer for a message that has to be read.
 pub(crate) const LINGER_OK_MS: u64 = 800;
 pub(crate) const LINGER_MSG_MS: u64 = 2200;
+
+/// Sends a `dictation://state` event to the pages and keeps the taskbar button
+/// (when there is one) showing the same state.
+pub(crate) fn emit_state(app: &AppHandle, payload: serde_json::Value) {
+    if let Some(state) = payload
+        .get("state")
+        .and_then(|s| s.as_str())
+        .and_then(taskbar::WidgetState::from_dictation)
+    {
+        taskbar::set_state(state);
+    }
+    let _ = app.emit("dictation://state", payload);
+}
+
+/// Starts the taskbar mic button. Its callbacks run on the widget's own
+/// thread, so each one only hands work to the app and returns.
+pub(crate) fn start_taskbar_widget(app: &AppHandle) {
+    use taskbar::Event;
+    let events = app.clone();
+    let status = app.clone();
+    taskbar::start(taskbar::Config {
+        x: app.state::<AppState>().settings.get().taskbar_widget_x,
+        on_event: Arc::new(move |ev| {
+            let app = events.clone();
+            match ev {
+                Event::Clicked => {
+                    tauri::async_runtime::spawn_blocking(move || taskbar_click(&app));
+                }
+                Event::HoverStart => {
+                    window::show_idle_overlay(&app);
+                    let _ = app.emit("overlay://widget-hover", true);
+                }
+                Event::HoverEnd => {
+                    let _ = app.emit("overlay://widget-hover", false);
+                }
+                Event::Moved(x) => {
+                    // Writes a file: not on the widget's thread.
+                    tauri::async_runtime::spawn_blocking(move || {
+                        let saved = app
+                            .state::<AppState>()
+                            .settings
+                            .update(|s| s.taskbar_widget_x = Some(x));
+                        if let Ok(saved) = saved {
+                            let _ = app.emit("settings://changed", &saved);
+                        }
+                    });
+                }
+            }
+        }),
+        on_status: Arc::new(move |s| {
+            let _ = status.emit("taskbar://status", &s);
+            // The widget replaces the floating circle: a pinned overlay goes
+            // away while it is there and comes back when it is not.
+            window::sync_overlay_pin(&status);
+        }),
+    });
+}
+
+/// Watches the microphone for the life of the app: when it is unplugged,
+/// muted or blocked the tray icon and the taskbar button turn red.
+pub(crate) fn start_mic_watch(app: &AppHandle) {
+    let app = app.clone();
+    let spawned = std::thread::Builder::new()
+        .name("mic-watch".into())
+        .spawn(move || {
+            let mut last = None;
+            loop {
+                let device = app.state::<AppState>().settings.get().microphone;
+                let status = mic::check(device.as_deref());
+                if last != Some(status) {
+                    last = Some(status);
+                    tracing::info!(?status, "microphone status");
+                    taskbar::set_mic_ok(status.is_ok());
+                    tray::set_mic_status(&app, status);
+                    let _ = app.emit("mic://status", status);
+                }
+                std::thread::sleep(std::time::Duration::from_secs(2));
+            }
+        });
+    if spawned.is_err() {
+        tracing::warn!("could not start the microphone watcher");
+    }
+}
+
+/// A click on the taskbar button: focuses a result waiting for review, ignores
+/// a take that is being transcribed, otherwise starts or stops dictation.
+fn taskbar_click(app: &AppHandle) {
+    let state = app.state::<AppState>();
+    let reviewing = state
+        .dictation_review
+        .lock()
+        .unwrap_or_else(|p| p.into_inner())
+        .is_some();
+    if reviewing {
+        window::focus_overlay(app);
+    } else if !state.voice.is_transcribing() {
+        shortcuts::toggle_dictation(app);
+    }
+}
 
 fn init_state(app: &AppHandle) -> Result<AppState, Box<dyn std::error::Error>> {
     let data_dir = app.path().app_data_dir()?;
@@ -106,14 +207,11 @@ fn on_voice_event(app: &AppHandle, ev: VoiceEvent) {
             // A stop arriving after Esc-cancel must not resurrect the overlay as
             // idle; report cancelled instead (the flag stays for run_dictation).
             if s == "idle" && state.dictation_cancel.load(Ordering::Relaxed) {
-                let _ = app.emit(
-                    "dictation://state",
-                    serde_json::json!({ "state": "cancelled" }),
-                );
+                emit_state(app, serde_json::json!({ "state": "cancelled" }));
                 // Back to the idle card (pinned) or away (not pinned).
                 hide_overlay_later(app, LINGER_MSG_MS);
             } else {
-                let _ = app.emit("dictation://state", serde_json::json!({ "state": s }));
+                emit_state(app, serde_json::json!({ "state": s }));
             }
         }
         VoiceEvent::Partial { text } => {
@@ -125,8 +223,8 @@ fn on_voice_event(app: &AppHandle, ev: VoiceEvent) {
         }
         VoiceEvent::Error { code, detail } => {
             retract_in_background(app);
-            let _ = app.emit(
-                "dictation://state",
+            emit_state(
+                app,
                 serde_json::json!({ "state": "error", "error": { "code": code, "detail": detail } }),
             );
             hide_overlay_later(app, LINGER_MSG_MS);
@@ -177,10 +275,7 @@ async fn run_dictation(app: AppHandle, raw: String) {
     // Esc/X cancel wins over any pending transcript.
     if state.dictation_cancel.swap(false, Ordering::Relaxed) {
         retract_live_typed(&app).await;
-        let _ = app.emit(
-            "dictation://state",
-            serde_json::json!({ "state": "cancelled" }),
-        );
+        emit_state(&app, serde_json::json!({ "state": "cancelled" }));
         state.dictation_busy.store(false, Ordering::Relaxed);
         hide_overlay_later(&app, LINGER_MSG_MS);
         return;
@@ -193,7 +288,7 @@ async fn run_dictation(app: AppHandle, raw: String) {
         // that turned out empty: close it and hand focus back.
         window::set_overlay_review(&app, false);
         window::restore_target(&app);
-        let _ = app.emit("dictation://state", serde_json::json!({ "state": "empty" }));
+        emit_state(&app, serde_json::json!({ "state": "empty" }));
         LINGER_MSG_MS
     } else if state.settings.get().review_before_insert {
         // Hold the result for editing. Stays "busy" until confirmed, retried or cancelled.
@@ -202,8 +297,8 @@ async fn run_dictation(app: AppHandle, raw: String) {
             .lock()
             .unwrap_or_else(|p| p.into_inner()) = Some(ReviewPending { raw: raw.clone() });
         window::set_overlay_review(&app, true);
-        let _ = app.emit(
-            "dictation://state",
+        emit_state(
+            &app,
             serde_json::json!({
                 "state": "review",
                 "result": { "raw": raw, "inserted": raw },
@@ -238,22 +333,19 @@ async fn insert_and_report(app: &AppHandle, text: String, live: bool) -> bool {
     };
     match insert {
         Ok(Ok(())) => {
-            let _ = app.emit(
-                "dictation://state",
+            emit_state(
+                app,
                 serde_json::json!({ "state": "inserted", "result": { "raw": text, "inserted": text } }),
             );
             true
         }
         Ok(Err(e)) => {
-            let _ = app.emit(
-                "dictation://state",
-                serde_json::json!({ "state": "error", "error": e }),
-            );
+            emit_state(app, serde_json::json!({ "state": "error", "error": e }));
             false
         }
         Err(e) => {
-            let _ = app.emit(
-                "dictation://state",
+            emit_state(
+                app,
                 serde_json::json!({ "state": "error", "error": { "code": "other", "detail": e.to_string() } }),
             );
             false
@@ -277,7 +369,7 @@ pub(crate) async fn confirm_review(app: AppHandle, text: String) -> Result<(), e
     window::restore_target(&app);
     tokio::time::sleep(std::time::Duration::from_millis(150)).await;
     let linger = if text.is_empty() {
-        let _ = app.emit("dictation://state", serde_json::json!({ "state": "empty" }));
+        emit_state(&app, serde_json::json!({ "state": "empty" }));
         LINGER_MSG_MS
     } else if insert_and_report(&app, text, false).await {
         LINGER_OK_MS
@@ -358,9 +450,15 @@ pub fn run() {
             };
             autostart::sync(&handle, start_with_os);
             tray::create(&handle)?;
+            start_mic_watch(&handle);
             shortcuts::register_all(&handle);
             let _ = window::create_overlay(&handle);
-            if handle.state::<AppState>().settings.get().overlay_pinned {
+            let settings = handle.state::<AppState>().settings.get();
+            if settings.taskbar_widget {
+                // A pinned overlay waits for the widget's status: it only shows
+                // when the button could not be placed.
+                start_taskbar_widget(&handle);
+            } else if settings.overlay_pinned {
                 window::show_overlay(&handle);
             }
             // Pre-create settings hidden: on-demand creation flakes on some
@@ -407,6 +505,9 @@ pub fn run() {
             commands::overlay_fit_width,
             commands::dictation_overlay_card,
             commands::dictation_toggle,
+            commands::taskbar_widget_status,
+            commands::taskbar_widget_reset_position,
+            commands::overlay_hide_idle,
         ])
         .build(tauri::generate_context!())
         .expect("error while building Open Local Dictation")

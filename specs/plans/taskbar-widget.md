@@ -1,6 +1,6 @@
 # Plan: taskbar widget
 
-Status: proposed, not started. Nothing in this file is implemented yet.
+Status: implemented (first version). Differences from this plan: no right-click menu and no tooltip (the button only starts dictation and shows the pill); bottom taskbar only (a top taskbar reports a reason); the default spot also steps left past other widgets parked beside the tray; `SHAppBarMessage` is not used (the taskbar rectangle decides); the app manifest gained the Windows 10/11 `supportedOS` entry (needed for a layered child window); retry every 5 s only while the taskbar is missing. The position is absolute and fixed (`taskbarWidgetX`, saved on the first placement and on every drag), not an offset from the tray, so tray changes never move the button. Sections 3.4 (offset), 3.6 (menu, tooltips) and 4 (`Hide taskbar button`) describe what was dropped.
 
 ## 1. Goal
 

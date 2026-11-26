@@ -34,6 +34,8 @@ Tauri backend (Rust, src-tauri/src)
   models.rs    ── catalog, ModelStore, downloads, custom-model detection
   gpu.rs       ── CUDA pack: relaunch-from-pack-folder, reuse, crash guard
   settings.rs  ── settings.json
+  mic.rs       -- microphone present / muted / blocked check (drives the red tray icon and taskbar button)
+  taskbar.rs   -- optional mic button inside the taskbar (own thread, native child window)
   tray.rs  autostart.rs  logging.rs  hardware.rs  errors.rs  state.rs
         │
 Native: sherpa-onnx + ONNX Runtime DLLs (shared), WASAPI via cpal, Win32 SendInput / window APIs
@@ -45,6 +47,8 @@ Native: sherpa-onnx + ONNX Runtime DLLs (shared), WASAPI via cpal, Win32 SendInp
 |---|---|---|
 | `overlay` | The dictation card. Transparent, always on top, no taskbar entry, clipped to the card with a window region; does not take focus while listening, takes it in review. | none |
 | `settings` | Five tabs (Speech model, Processing, Dictation, Overlay, App). Fixed 780 x 656, not resizable or maximizable. | none; the page draws its own title bar (minimize, close-to-tray) |
+
+A third surface, not a Tauri window, is the **taskbar button** (`taskbar.rs`, opt-in `taskbarWidget`): a small layered native window that is a child of `Shell_TrayWnd`, on its own thread so a stall can never block Explorer. It is the bubble style's circle moved into the taskbar: while it is on, the app draws no circle of its own and the pill (the overlay window, anchored by `window::anchored_geometry`) opens above it on hover, click or dictation. Only a bottom taskbar is supported.
 
 The app lives in the tray. Closing settings only hides them; `Quit` in the tray exits.
 
