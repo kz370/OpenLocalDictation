@@ -50,6 +50,7 @@ There is **no** command that removes the CUDA libraries.
 | `dictation_set_language` | `language: string` | `()` | Saves `language`; emits `settings://changed`. |
 | `dictation_reset_overlay_position` | — | `()` | Clears `overlayX/Y` and moves the overlay to its default spot. |
 | `settings_open` | — | `()` | Opens the settings window (the overlay's gear button). |
+| `overlay_set_orb_shift` | `shift: i32` | `()` | Bubble style: saves where the mic circle sits relative to the window center (logical px) when a drag ends; emits `settings://changed`. Reset by `dictation_reset_overlay_position`. |
 | `overlay_set_pinned` | `pinned: bool` | `()` | Also the idle overlay's X button (unpin = close the window, never quits the app). Saves `overlayPinned`, emits `settings://changed`. Pinned: the overlay shows now and stays on screen (always on top), falling back to an idle card after each dictation (event `overlay://idle`). Unpinned and idle: hides. |
 | `overlay_set_mini` | `mini: bool` | `()` | Saves `overlayMini`, emits `settings://changed`, re-applies the small (400x68) or full (480x176) layout. Review stays small: its editor floats above the pill. |
 | `dictation_toggle` | — | `()` | Overlay mic button: starts dictation, or stops and inserts when listening. |
@@ -66,7 +67,7 @@ There is **no** command that removes the CUDA libraries.
 | `dictation://state` | `DictationStateEvent` | all | `listening`, `transcribing`, `idle`, `reviewing` (editor open, still transcribing), `review` (result ready), `inserted`, `empty`, `cancelled`, `error`. |
 | `dictation://target` | `{ targetApp }` | all | Friendly name of the window text will go into. |
 | `dictation://review-shortcut` | `"insert" \| "retry" \| "cancel"` | overlay | Review keys pressed while another app has focus. |
-| `overlay://shown` | `()` | overlay | The overlay window was just shown from hidden, or the tray opened an already visible one; the page reveals the card with its pop-in zoom. |
+| `overlay://shown` | `()` | overlay | The overlay window was just shown from hidden (or a pending zoom-out was cancelled); the page reveals the card with its pop-in zoom. |
 | `overlay://hiding` | `()` | overlay | A close was requested: the page plays a 200 ms zoom-out. The window hides after `CLOSE_ANIM_MS` (200 ms) unless it is shown again meanwhile. |
 | `overlay://hidden` | `()` | overlay | The overlay is about to hide: the page resets to a bare idle card and turns invisible until the next `overlay://shown`. |
 | `voice://event` | `VoiceEvent` | overlay | Only `level` (value + 24 spectrum bands) and `partial` (live text). |

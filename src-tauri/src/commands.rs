@@ -34,6 +34,7 @@ pub fn save_settings(
         let (x, y, dir) = (s.overlay_x, s.overlay_y, s.models_dir.clone());
         // Pin and mini are owned by the overlay commands, like the position.
         let (pinned, mini, mini_w) = (s.overlay_pinned, s.overlay_mini, s.overlay_mini_width);
+        let orb_shift = s.overlay_orb_shift;
         *s = settings;
         s.models_dir = dir;
         s.overlay_x = x;
@@ -41,6 +42,7 @@ pub fn save_settings(
         s.overlay_pinned = pinned;
         s.overlay_mini = mini;
         s.overlay_mini_width = mini_w;
+        s.overlay_orb_shift = orb_shift;
     })?;
     if saved.model != before.model || saved.device != before.device {
         state.stt.unload();
@@ -553,6 +555,19 @@ pub fn dictation_overlay_card(app: AppHandle, shapes: Option<Vec<[f64; 4]>>) {
 #[tauri::command]
 pub async fn dictation_toggle(app: AppHandle) {
     let _ = tokio::task::spawn_blocking(move || shortcuts::toggle_dictation(&app)).await;
+}
+
+/// Saves where the bubble's mic circle sits relative to the window's center
+/// (logical px) once a drag ends.
+#[tauri::command]
+pub fn overlay_set_orb_shift(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    shift: i32,
+) -> CmdResult<()> {
+    let saved = state.settings.update(|s| s.overlay_orb_shift = shift)?;
+    let _ = app.emit("settings://changed", &saved);
+    Ok(())
 }
 
 /// Clears the dragged overlay position, reverting to the default spot.

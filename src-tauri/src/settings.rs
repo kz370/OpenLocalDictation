@@ -63,6 +63,9 @@ pub struct Settings {
     pub overlay_position_locked: bool,
     /// Width of the small overlay in logical px (dragged on its right edge).
     pub overlay_mini_width: u32,
+    /// Bubble style: how far (logical px, + = right) the mic circle sits from the
+    /// window's center. The pill stays inside the screen; the circle may reach the edge.
+    pub overlay_orb_shift: i32,
     /// Locks the small overlay's width: no resize handle.
     pub overlay_size_locked: bool,
     /// Look of the small overlay: "pill" (one pill with the mic inside, always
@@ -100,6 +103,7 @@ impl Default for Settings {
             overlay_horizontal_only: true,
             overlay_position_locked: false,
             overlay_mini_width: 400,
+            overlay_orb_shift: 0,
             overlay_size_locked: false,
             overlay_style: "pill".into(),
         }
@@ -145,6 +149,7 @@ impl Settings {
         self.overlay_mini_width = self
             .overlay_mini_width
             .clamp(MINI_MIN_WIDTH, MINI_MAX_WIDTH);
+        self.overlay_orb_shift = self.overlay_orb_shift.clamp(-2000, 2000);
         self.vad_threshold = self.vad_threshold.clamp(0.2, 0.95);
         self.silence_ms = self.silence_ms.clamp(300, 3000);
         self.auto_stop_silence_secs = self.auto_stop_silence_secs.min(120);

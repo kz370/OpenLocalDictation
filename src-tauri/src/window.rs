@@ -760,10 +760,13 @@ fn show_overlay_now(app: &AppHandle, w: &WebviewWindow) {
 /// Clears the dragged overlay position and moves it back to the default spot
 /// immediately (even while hidden).
 pub fn reset_overlay_position(app: &AppHandle) {
-    let _ = app.state::<AppState>().settings.update(|s| {
+    if let Ok(saved) = app.state::<AppState>().settings.update(|s| {
         s.overlay_x = None;
         s.overlay_y = None;
-    });
+        s.overlay_orb_shift = 0;
+    }) {
+        let _ = app.emit("settings://changed", &saved);
+    }
     let Ok(w) = create_overlay(app) else { return };
     suppress_persistence();
     if let Some((x, y)) = default_overlay_position(&w) {
@@ -805,13 +808,8 @@ pub fn show_idle_overlay(app: &AppHandle) {
         if state.voice.is_active() || state.dictation_busy.load(Ordering::Relaxed) {
             return;
         }
-        let was_visible = w.is_visible().unwrap_or(false);
         show_overlay_now(&app2, &w);
         let _ = app2.emit_to(OVERLAY, "overlay://idle", ());
-        if was_visible {
-            // A visible (pinned) overlay: the tray click still gets its pop-in.
-            let _ = app2.emit_to(OVERLAY, "overlay://shown", ());
-        }
     });
 }
 

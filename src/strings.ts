@@ -22,6 +22,7 @@ const EN: Record<string, string> = {
   "overlay.close": "Close the dictation window",
   "overlay.idleHint": "Press {{keys}} or click the mic · nothing is heard until then",
   "overlay.micStart": "Start dictation",
+  "overlay.middleClose": "middle-click to close",
   "overlay.micStop": "Stop and insert",
   "overlay.pin": "Pin: keep on screen, always on top",
   "overlay.unpin": "Unpin: hide when not dictating",

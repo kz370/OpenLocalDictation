@@ -1,6 +1,6 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { Check, CheckCircle2, ChevronDown, Copy, Globe, Maximize2, Mic, Minimize2, Pencil, Pin, PinOff, RotateCcw, Settings as SettingsIcon, Square, X, XCircle } from "lucide-react";
-import { getCurrentWindow, PhysicalPosition } from "@tauri-apps/api/window";
+import { getCurrentWindow, monitorFromPoint, PhysicalPosition } from "@tauri-apps/api/window";
 import { ipc, on } from "../ipc";
 import { KNOWN_LANGUAGES } from "../knownLanguages";
 import { useSettings } from "../settingsStore";
@@ -15,8 +15,33 @@ import { prettyAccelerator } from "../components/ShortcutInput";
  * Alt locks to vertical-only. Uses manual `setPosition` (not Tauri's
  * `startDragging`, which hands off to the OS and can't be axis-constrained
  * mid-drag), throttled to one IPC call per frame. */
-function useOverlayDrag(horizontalOnly: boolean, locked: boolean) {
-  const drag = useRef<{ startX: number; startY: number; winX: number; winY: number; frame: number | null; pending: { x: number; y: number } | null } | null>(null);
+/** Bubble style: the window (the pill's width) stays inside the monitor, while
+ *  the mic circle may go all the way to the screen edge by sliding inside the
+ *  window (`orb.shift`, logical px from the window's center). */
+interface OrbDrag {
+  shift: number;
+  setShift: (shift: number) => void;
+  /** True while a drag runs (the clip region is widened so the circle is never cut). */
+  setDragging: (on: boolean) => void;
+}
+const ORB_HALF = 22; // half the circle (ORB in this file)
+const DRAG_PAD = 60; // invisible clip room each side of the circle while dragging
+const WINDOW_EDGE = 0; // logical px the window keeps from the monitor's side (the pill has its own 8 px inside)
+
+function useOverlayDrag(horizontalOnly: boolean, locked: boolean, orb: OrbDrag | null) {
+  type Mon = { x: number; y: number; w: number; h: number };
+  const drag = useRef<{
+    startX: number;
+    startY: number;
+    winX: number; // window x with the circle's shift folded in (the circle's own spot)
+    winY: number;
+    winW: number;
+    mon: Mon | null;
+    shift: number;
+    startShift: number;
+    frame: number | null;
+    pending: { x: number; y: number } | null;
+  } | null>(null);
 
   const flush = () => {
     const d = drag.current;
@@ -25,7 +50,26 @@ function useOverlayDrag(horizontalOnly: boolean, locked: boolean) {
     if (!d.pending) return;
     const { x, y } = d.pending;
     d.pending = null;
-    void getCurrentWindow().setPosition(new PhysicalPosition(x, y));
+    if (!orb) {
+      void getCurrentWindow().setPosition(new PhysicalPosition(x, y));
+      return;
+    }
+    // x is where the window would be if the circle sat at its center.
+    const scale = window.devicePixelRatio || 1;
+    const half = d.winW / 2;
+    let center = x + half;
+    let winX = x;
+    if (d.mon) {
+      const left = d.mon.x;
+      const right = d.mon.x + d.mon.w;
+      const orbHalf = ORB_HALF * scale;
+      center = Math.min(Math.max(center, left + orbHalf), right - orbHalf);
+      const edge = WINDOW_EDGE * scale;
+      winX = Math.min(Math.max(center - half, left + edge), right - d.winW - edge);
+    }
+    d.shift = Math.round((center - (winX + half)) / scale);
+    orb.setShift(d.shift);
+    void getCurrentWindow().setPosition(new PhysicalPosition(Math.round(winX), y));
   };
 
   return {
@@ -35,11 +79,24 @@ function useOverlayDrag(horizontalOnly: boolean, locked: boolean) {
       // element the instant the (async) window move puts the cursor even
       // slightly outside its bounds — the drag would visually never start.
       e.currentTarget.setPointerCapture(e.pointerId);
-      void getCurrentWindow()
-        .outerPosition()
-        .then((pos) => {
-          drag.current = { startX: e.screenX, startY: e.screenY, winX: pos.x, winY: pos.y, frame: null, pending: null };
-        });
+      const win = getCurrentWindow();
+      void Promise.all([win.outerPosition(), win.outerSize()]).then(([pos, size]) => {
+        const scale = window.devicePixelRatio || 1;
+        const shift = orb?.shift ?? 0;
+        drag.current = {
+          startX: e.screenX,
+          startY: e.screenY,
+          winX: pos.x + Math.round(shift * scale),
+          winY: pos.y,
+          winW: size.width,
+          mon: null,
+          shift,
+          startShift: shift,
+          frame: null,
+          pending: null,
+        };
+        orb?.setDragging(true);
+      });
     },
     onPointerMove: (e: React.PointerEvent) => {
       const d = drag.current;
@@ -52,11 +109,24 @@ function useOverlayDrag(horizontalOnly: boolean, locked: boolean) {
       if (e.shiftKey || horizontalOnly) dy = 0;
       if (e.altKey && !horizontalOnly) dx = 0;
       d.pending = { x: d.winX + dx, y: d.winY + dy };
+      if (orb) {
+        // The monitor under the circle bounds it (it can cross to another one).
+        const cx = d.pending.x + d.winW / 2;
+        const cy = d.pending.y + (window.innerHeight * scale) / 2;
+        void monitorFromPoint(cx, cy)
+          .then((m) => {
+            if (m && drag.current === d) d.mon = { x: m.position.x, y: m.position.y, w: m.size.width, h: m.size.height };
+          })
+          .catch(() => {});
+      }
       if (d.frame == null) d.frame = requestAnimationFrame(flush);
     },
     onPointerUp: (e: React.PointerEvent) => {
       if (e.currentTarget.hasPointerCapture(e.pointerId)) e.currentTarget.releasePointerCapture(e.pointerId);
+      const d = drag.current;
       drag.current = null;
+      orb?.setDragging(false);
+      if (orb && d && d.shift !== d.startShift) void ipc.overlaySetOrbShift(d.shift).catch(quiet);
     },
   };
 }
@@ -168,18 +238,51 @@ const ORB_GAP = 6;
 const PILL_H = 52;
 
 /** The overlay's mic button: starts dictation when idle, stops and inserts
- *  while listening. Pressing it never starts a drag. */
-function MicBtn(props: { live: boolean; onClick: () => void }) {
+ *  while listening. A plain click acts; pressing and moving past DRAG_SLOP drags
+ *  the overlay instead (and the click that ends the drag is ignored). */
+const DRAG_SLOP = 4;
+function MicBtn(props: { live: boolean; onClick: () => void; drag: ReturnType<typeof useOverlayDrag>; closeHint?: boolean }) {
   const label = t(props.live ? "overlay.micStop" : "overlay.micStart");
+  const tip = props.closeHint ? `${label} · ${t("overlay.middleClose")}` : label;
+  const press = useRef<{ x: number; y: number } | null>(null);
+  const dragging = useRef(false);
   return (
     <button
       type="button"
       className={`overlay-mic${props.live ? " live" : ""}`}
       aria-label={label}
-      title={label}
-      onPointerDown={(e) => e.stopPropagation()}
+      title={tip}
+      onPointerDown={(e) => {
+        // The parent's drag starts only once the pointer moves: capturing now
+        // would take the click away from this button.
+        e.stopPropagation();
+        if (e.button !== 0) return;
+        press.current = { x: e.screenX, y: e.screenY };
+        dragging.current = false;
+      }}
+      onPointerMove={(e) => {
+        if (dragging.current) {
+          props.drag.onPointerMove(e);
+          return;
+        }
+        const p = press.current;
+        if (!p || (e.buttons & 1) === 0) return;
+        if (Math.hypot(e.screenX - p.x, e.screenY - p.y) < DRAG_SLOP) return;
+        dragging.current = true;
+        props.drag.onPointerDown(e);
+      }}
+      onPointerUp={(e) => {
+        press.current = null;
+        if (dragging.current) props.drag.onPointerUp(e);
+      }}
       onDoubleClick={(e) => e.stopPropagation()}
-      onClick={props.onClick}
+      onClick={() => {
+        if (dragging.current) {
+          dragging.current = false;
+          return;
+        }
+        props.onClick();
+      }}
     >
       {props.live ? <Square size={11} fill="currentColor" /> : <Mic size={13} />}
     </button>
@@ -402,7 +505,17 @@ export function Overlay() {
   const draftDirty = useRef(false);
   const horizontalOnly = useSettings((s) => s.settings?.overlayHorizontalOnly ?? true);
   const positionLocked = useSettings((s) => s.settings?.overlayPositionLocked ?? false);
-  const drag = useOverlayDrag(horizontalOnly, positionLocked);
+  // Bubble style: the circle's offset from the window's center (see OrbDrag).
+  const savedShift = useSettings((s) => s.settings?.overlayOrbShift ?? 0);
+  const [orbShift, setOrbShift] = useState(savedShift);
+  useEffect(() => setOrbShift(savedShift), [savedShift]);
+  const bubbleStyle = useSettings((s) => (s.settings?.overlayStyle ?? "pill") === "bubble");
+  const [orbDragging, setOrbDragging] = useState(false);
+  const drag = useOverlayDrag(
+    horizontalOnly,
+    positionLocked,
+    bubbleStyle && mini ? { shift: orbShift, setShift: setOrbShift, setDragging: setOrbDragging } : null,
+  );
   const headRef = useRef<HTMLDivElement>(null);
   // Small idle pill folds to a circle; a short hover unfolds it.
   const [hover, setHover] = useState(false);
@@ -604,12 +717,18 @@ export function Overlay() {
   // shows above it while dictating, while hovered or while its menu is open.
   const bubble = miniView && overlayStyle === "bubble";
   const pillShown = !bubble || !idle || hover || langOpen;
+  const pillShownRef = useRef(false);
   const [winW, setWinW] = useState(window.innerWidth);
   useEffect(() => {
     const onResize = () => setWinW(window.innerWidth);
     window.addEventListener("resize", onResize);
     return () => window.removeEventListener("resize", onResize);
   }, []);
+  // The circle's slide inside the window (the pill stays put), limited to the window.
+  const shift = bubble ? Math.round(Math.max(-(winW / 2 - ORB / 2), Math.min(winW / 2 - ORB / 2, orbShift))) : 0;
+  useLayoutEffect(() => {
+    document.documentElement.style.setProperty("--orb-shift", `${shift}px`);
+  }, [shift]);
   // The window region follows the visible shapes: the circle, plus the pill
   // while it shows. The pill's shape is added before it fades in and dropped
   // once it has faded out. Computed from the layout constants (not measured)
@@ -621,15 +740,27 @@ export function Overlay() {
     }
     const room = parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--menu-room")) || 300;
     const orbTop = room + ORB_TOP;
-    const orb: [number, number, number, number] = [winW / 2 - ORB / 2, orbTop, ORB, ORB];
+    const ox = winW / 2 - ORB / 2 + shift;
+    // While dragging, the window moves a frame before this region does: a wider
+    // (invisible) strip around the circle keeps it from being cut or lost.
+    const x0 = orbDragging ? Math.max(0, ox - DRAG_PAD) : ox;
+    const x1 = orbDragging ? Math.min(winW, ox + ORB + DRAG_PAD) : ox + ORB;
+    const orb: [number, number, number, number] = [x0, orbTop, x1 - x0, ORB];
     const pill: [number, number, number, number] = [8, orbTop - ORB_GAP - PILL_H, winW - 16, PILL_H];
+    const pillWasShown = pillShownRef.current;
+    pillShownRef.current = pillShown;
     if (pillShown) {
       void ipc.dictationOverlayCard([orb, pill]).catch(quiet);
       return;
     }
+    // Only the pill's removal waits for its fade-out; the circle's shape never does.
+    if (!pillWasShown) {
+      void ipc.dictationOverlayCard([orb]).catch(quiet);
+      return;
+    }
     const id = window.setTimeout(() => void ipc.dictationOverlayCard([orb]).catch(quiet), PILL_FADE_MS);
     return () => window.clearTimeout(id);
-  }, [bubble, pillShown, winW]);
+  }, [bubble, pillShown, winW, shift, orbDragging]);
   // Never leave the window clipped to the bubble when the page goes away.
   useEffect(() => () => void ipc.dictationOverlayCard(null).catch(quiet), []);
   // The pill always fits its header: grow (and save) the width when the
@@ -683,7 +814,7 @@ export function Overlay() {
   const miniApp = miniView && targetApp && ["listening", "transcribing", "correcting", "reviewing", "review"].includes(state) ? targetApp : null;
   const micClick = () => void (listening ? ipc.dictationInsertNow(text) : ipc.dictationToggle()).catch(quiet);
   let icon = listening ? (
-    <MicBtn live onClick={micClick} />
+    <MicBtn live onClick={micClick} drag={drag} />
   ) : (
     <span className="overlay-rec" aria-hidden>
       <Mic size={12} />
@@ -692,7 +823,7 @@ export function Overlay() {
   let label = t("overlay.listeningLabel");
   switch (state) {
     case "idle":
-      icon = <MicBtn live={false} onClick={micClick} />;
+      icon = <MicBtn live={false} onClick={micClick} drag={drag} closeHint={bubble} />;
       label = t("overlay.idle");
       break;
     case "transcribing":
@@ -942,6 +1073,12 @@ export function Overlay() {
             onContextMenu={(e) => {
               e.preventDefault();
               setHover(true);
+            }}
+            // Middle click closes the bubble (idle) or cancels the take, without opening the pill.
+            onAuxClick={(e) => {
+              if (e.button !== 1) return;
+              e.preventDefault();
+              void (idle ? ipc.overlaySetPinned(false) : ipc.dictationCancel()).catch(quiet);
             }}
           >
             {icon}

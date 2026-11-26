@@ -418,7 +418,7 @@ html.overlay {
 .overlay-card.mini.bubble {
   width: 44px;
   height: 44px;
-  margin: calc(var(--menu-room) + 12px) 0 0 calc(50% - 22px);
+  margin: calc(var(--menu-room) + 12px) 0 0 calc(50% - 22px + var(--orb-shift, 0px));
   padding: 0;
   border-radius: 50%;
 }
@@ -506,14 +506,14 @@ html.overlay {
 .overlay-pill {
   position: absolute;
   z-index: 2;
-  left: calc(29px - 50vw);
+  left: calc(29px - 50vw - var(--orb-shift, 0px));
   bottom: calc(100% + 7px);
   width: calc(100vw - 16px);
   height: 52px;
   pointer-events: none;
   opacity: 0;
   transform: translateY(6px) scale(0.6);
-  transform-origin: 50% calc(100% + 28px);
+  transform-origin: calc(50% + var(--orb-shift, 0px)) calc(100% + 28px);
   transition:
     opacity 120ms ease,
     transform 160ms cubic-bezier(0.4, 0, 1, 1);

@@ -22,6 +22,7 @@ Settings (settings.rs, stored in <data>\settings.json; unknown/missing fields fa
   overlayX / overlayY  i32?     null                    last dragged card position, physical px
   overlayPinned        bool     false                   overlay stays on screen, always on top; idle (mic closed) until shortcut or mic button
   overlayMiniWidth     u32      400                     small overlay width, logical px, 320-800 (dragged on its right edge)
+  overlayOrbShift      i32      0                       bubble style: mic circle offset from the window center, logical px (clamped -2000..2000)
   overlaySizeLocked    bool     false                   no resize handle on the small overlay
   overlayStyle         string   "pill"                  small overlay look: pill | bubble (mic circle, pill above on hover/use)
   overlayHorizontalOnly bool    true                    overlay drags sideways only and stays just above the taskbar (y is re-docked on show)

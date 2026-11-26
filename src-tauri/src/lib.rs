@@ -397,6 +397,7 @@ pub fn run() {
             commands::dictation_retry,
             commands::dictation_set_language,
             commands::dictation_reset_overlay_position,
+            commands::overlay_set_orb_shift,
             commands::dictation_overlay_menu,
             commands::dictation_overlay_bubble,
             commands::settings_open,

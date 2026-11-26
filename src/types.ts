@@ -39,6 +39,8 @@ export interface Settings {
   overlayLayouts: "small" | "large" | "both";
   /** Small overlay width in logical px (320-800). */
   overlayMiniWidth: number;
+  /** Bubble style: the mic circle's offset from the window center (logical px). */
+  overlayOrbShift: number;
   /** No resize handle on the small overlay. */
   overlaySizeLocked: boolean;
   /** Small overlay look: one pill with the mic, or a mic bubble with the pill above it on hover. */
