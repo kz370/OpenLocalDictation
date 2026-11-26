@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="docs/app-icon.webp" width="96" alt="Open Local Dictation icon">
+<img src="website/app-icon.webp" width="96" alt="Open Local Dictation icon">
 
 # Open Local Dictation
 
@@ -11,7 +11,7 @@
 [Documentation](./specs) ·
 [Report an issue](https://github.com/kz370/OpenLocalDictation/issues)
 
-<img src="docs/screenshots/scene-listening.webp" width="560" alt="The dictation pill above the taskbar while listening, with the live text above it">
+<img src="website/screenshots/scene-listening.webp" width="560" alt="The dictation pill above the taskbar while listening, with the live text above it">
 
 </div>
 
@@ -72,7 +72,7 @@ No model is installed yet, so the Settings window opens on the **Speech model** 
 *base* or *small* (small is the most accurate and is marked *Recommended*), or point the app at a folder that
 already holds your models. Then press the shortcut in any app.
 
-<p align="center"><img src="docs/screenshots/settings-model.webp" width="560" alt="Speech model tab"></p>
+<p align="center"><img src="website/screenshots/settings-model.webp" width="560" alt="Speech model tab"></p>
 
 ## Using it
 
@@ -94,7 +94,7 @@ already holds your models. Then press the shortcut in any app.
 | Auto-stop | A take also ends after 8 s of silence (configurable) or 5 minutes. |
 
 <p align="center">
-<img src="docs/screenshots/scene-review.webp" width="470" alt="Review mode: edit the text, then insert it">
+<img src="website/screenshots/scene-review.webp" width="470" alt="Review mode: edit the text, then insert it">
 </p>
 
 **How the text is inserted.** *Typing* (default) sends real key events by scancode using the destination window's
@@ -105,7 +105,7 @@ under an English layout) are sent as Unicode. Add a trailing space after the tex
 **Languages.** Pick *Automatic* or one of about 80 languages. Changing it mid-take restarts the take on the new
 language without reloading the model. Settings > Dictation lets you choose which languages the pill's menu lists.
 
-<p align="center"><img src="docs/screenshots/scene-language.webp" width="470" alt="Language menu on the pill"></p>
+<p align="center"><img src="website/screenshots/scene-language.webp" width="470" alt="Language menu on the pill"></p>
 
 ## The pill and the taskbar button
 
@@ -123,7 +123,7 @@ Three ways to have it:
 - **Taskbar button**: the bubble's circle moved *into the Windows taskbar* (Settings > Overlay > *Mic button in
   the taskbar*). The app then draws no floating circle at all.
 
-<p align="center"><img src="docs/screenshots/scene-idle.webp" width="470" alt="The pill opening above the taskbar button"></p>
+<p align="center"><img src="website/screenshots/scene-idle.webp" width="470" alt="The pill opening above the taskbar button"></p>
 
 ### The taskbar button
 
@@ -137,13 +137,13 @@ Three ways to have it:
   scaling, and survives an Explorer restart.
 
 <p align="center">
-<img src="docs/screenshots/widget-idle.webp" width="44" alt="ready">
-<img src="docs/screenshots/widget-listening.webp" width="44" alt="listening">
-<img src="docs/screenshots/widget-busy.webp" width="44" alt="transcribing">
-<img src="docs/screenshots/widget-review.webp" width="44" alt="review">
-<img src="docs/screenshots/widget-done.webp" width="44" alt="inserted">
-<img src="docs/screenshots/widget-fail.webp" width="44" alt="nothing heard">
-<img src="docs/screenshots/widget-nomic.webp" width="44" alt="no microphone">
+<img src="website/screenshots/widget-idle.webp" width="44" alt="ready">
+<img src="website/screenshots/widget-listening.webp" width="44" alt="listening">
+<img src="website/screenshots/widget-busy.webp" width="44" alt="transcribing">
+<img src="website/screenshots/widget-review.webp" width="44" alt="review">
+<img src="website/screenshots/widget-done.webp" width="44" alt="inserted">
+<img src="website/screenshots/widget-fail.webp" width="44" alt="nothing heard">
+<img src="website/screenshots/widget-nomic.webp" width="44" alt="no microphone">
 </p>
 
 ### Microphone watchdog
@@ -153,7 +153,7 @@ disabled**, **muted**, or **blocked by Windows' privacy setting**, the tray icon
 red and the tray tooltip says what to do. Starting a dictation without a usable microphone does nothing but show
 a short warning:
 
-<p align="center"><img src="docs/screenshots/scene-nomic.webp" width="470" alt="Warning shown when no microphone is connected"></p>
+<p align="center"><img src="website/screenshots/scene-nomic.webp" width="470" alt="Warning shown when no microphone is connected"></p>
 
 ## Settings tour
 
@@ -162,16 +162,16 @@ or by launching the app a second time.
 
 <table>
 <tr>
-<td width="50%"><b>Speech model</b><br>Download Whisper tiny, base or small, or point at a shared models folder.<br><img src="docs/screenshots/settings-model.webp" alt="Speech model"></td>
-<td width="50%"><b>Processing</b><br>Run on the CPU or an NVIDIA GPU; install or reuse the CUDA libraries.<br><img src="docs/screenshots/settings-processing.webp" alt="Processing"></td>
+<td width="50%"><b>Speech model</b><br>Download Whisper tiny, base or small, or point at a shared models folder.<br><img src="website/screenshots/settings-model.webp" alt="Speech model"></td>
+<td width="50%"><b>Processing</b><br>Run on the CPU or an NVIDIA GPU; install or reuse the CUDA libraries.<br><img src="website/screenshots/settings-processing.webp" alt="Processing"></td>
 </tr>
 <tr>
-<td><b>Dictation</b><br>Shortcut, hold or toggle, language, microphone, review, typing or pasting.<br><img src="docs/screenshots/settings-dictation.webp" alt="Dictation"></td>
-<td><b>Overlay</b><br>Taskbar button, pin, size, style, opacity, position and locking.<br><img src="docs/screenshots/settings-overlay.webp" alt="Overlay"></td>
+<td><b>Dictation</b><br>Shortcut, hold or toggle, language, microphone, review, typing or pasting.<br><img src="website/screenshots/settings-dictation.webp" alt="Dictation"></td>
+<td><b>Overlay</b><br>Taskbar button, pin, size, style, opacity, position and locking.<br><img src="website/screenshots/settings-overlay.webp" alt="Overlay"></td>
 </tr>
 <tr>
-<td><b>App</b><br>Start with Windows, theme (system, light, dark), logs.<br><img src="docs/screenshots/settings-app.webp" alt="App"></td>
-<td><b>Light theme</b><br>The whole app follows the system theme or your choice.<br><img src="docs/screenshots/settings-overlay-light.webp" alt="Overlay tab, light theme"></td>
+<td><b>App</b><br>Start with Windows, theme (system, light, dark), logs.<br><img src="website/screenshots/settings-app.webp" alt="App"></td>
+<td><b>Light theme</b><br>The whole app follows the system theme or your choice.<br><img src="website/screenshots/settings-overlay-light.webp" alt="Overlay tab, light theme"></td>
 </tr>
 </table>
 
@@ -226,7 +226,7 @@ src-tauri/      Rust backend: Tauri 2, sherpa-onnx, cpal, Win32
   src/stt/        speech pipeline: VAD, Whisper, sessions
 specs/          architecture, behaviour, IPC API, data models, diagrams (the source of truth)
 scripts/        build.bat, bump-version.bat / .ps1
-docs/           the project website (GitHub Pages) and its screenshots
+website/        the project website (GitHub Pages) and its screenshots
 ```
 
 Everything is described in [`specs/`](./specs): [architecture](./specs/architecture_overview.md),
