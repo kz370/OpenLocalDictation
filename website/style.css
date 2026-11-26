@@ -10,6 +10,13 @@
   --accent-soft: #15332f;
   --radius: 16px;
   --max: 1120px;
+  /* names read by more-projects/more-projects.js */
+  --surface: var(--card);
+  --fg: var(--text);
+  --fg-muted: var(--muted);
+  --primary: var(--accent);
+  --radius-lg: var(--radius);
+  --maxw: var(--max);
 }
 
 * { box-sizing: border-box; }
