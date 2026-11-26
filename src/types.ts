@@ -23,6 +23,14 @@ export interface Settings {
   autoStopSilenceSecs: number;
   overlayX: number | null;
   overlayY: number | null;
+  /** Overlay stays on screen, always on top; idle until shortcut or mic button. */
+  overlayPinned: boolean;
+  /** Small overlay layout. */
+  overlayMini: boolean;
+  /** Small overlay width in logical px (320-800). */
+  overlayMiniWidth: number;
+  /** No resize handle on the small overlay. */
+  overlaySizeLocked: boolean;
 }
 
 export interface AppInfo {

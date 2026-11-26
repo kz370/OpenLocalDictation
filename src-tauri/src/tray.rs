@@ -1,12 +1,12 @@
 use crate::state::AppState;
-use crate::{shortcuts, window};
+use crate::window;
 use tauri::menu::{Menu, MenuItem, PredefinedMenuItem};
 use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
 use tauri::{AppHandle, Manager};
 
 pub fn create(app: &AppHandle) -> tauri::Result<()> {
     let title = MenuItem::with_id(app, "title", "Open Local Dictation", false, None::<&str>)?;
-    let dictate = MenuItem::with_id(app, "dictate", "Dictate", true, None::<&str>)?;
+    let dictate = MenuItem::with_id(app, "dictate", "Show dictation window", true, None::<&str>)?;
     let settings = MenuItem::with_id(app, "settings", "Settings", true, None::<&str>)?;
     let quit_item = MenuItem::with_id(app, "quit", "Quit", true, None::<&str>)?;
     let menu = Menu::with_items(
@@ -26,7 +26,7 @@ pub fn create(app: &AppHandle) -> tauri::Result<()> {
         .menu(&menu)
         .show_menu_on_left_click(false)
         .on_menu_event(|app, event| match event.id().as_ref() {
-            "dictate" => shortcuts::toggle_dictation(app),
+            "dictate" => window::show_idle_overlay(app),
             "settings" => {
                 let _ = window::open_settings(app);
             }
@@ -40,7 +40,7 @@ pub fn create(app: &AppHandle) -> tauri::Result<()> {
                 ..
             } = event
             {
-                let _ = window::open_settings(tray.app_handle());
+                window::show_idle_overlay(tray.app_handle());
             }
         });
     if let Some(icon) = app.default_window_icon() {

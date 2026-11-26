@@ -110,6 +110,8 @@ fn on_voice_event(app: &AppHandle, ev: VoiceEvent) {
                     "dictation://state",
                     serde_json::json!({ "state": "cancelled" }),
                 );
+                // Back to the idle card (pinned) or away (not pinned).
+                hide_overlay_later(app, LINGER_MSG_MS);
             } else {
                 let _ = app.emit("dictation://state", serde_json::json!({ "state": s }));
             }
@@ -180,6 +182,7 @@ async fn run_dictation(app: AppHandle, raw: String) {
             serde_json::json!({ "state": "cancelled" }),
         );
         state.dictation_busy.store(false, Ordering::Relaxed);
+        hide_overlay_later(&app, LINGER_MSG_MS);
         return;
     }
     let raw = raw.trim().to_string();
@@ -353,6 +356,9 @@ pub fn run() {
             tray::create(&handle)?;
             shortcuts::register_all(&handle);
             let _ = window::create_overlay(&handle);
+            if handle.state::<AppState>().settings.get().overlay_pinned {
+                window::show_overlay(&handle);
+            }
             // Pre-create settings hidden: on-demand creation flakes on some
             // machines while startup-created webviews always work.
             let _ = window::ensure_settings(&handle);
@@ -388,6 +394,11 @@ pub fn run() {
             commands::dictation_set_language,
             commands::dictation_reset_overlay_position,
             commands::dictation_overlay_menu,
+            commands::dictation_overlay_tip,
+            commands::overlay_set_pinned,
+            commands::overlay_set_mini,
+            commands::overlay_resize,
+            commands::dictation_toggle,
         ])
         .build(tauri::generate_context!())
         .expect("error while building Open Local Dictation")

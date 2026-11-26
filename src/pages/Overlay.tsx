@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Check, CheckCircle2, ChevronDown, Copy, Globe, Mic, Pencil, RotateCcw, X, XCircle } from "lucide-react";
+import { Check, CheckCircle2, ChevronDown, Copy, Globe, Maximize2, Mic, Minimize2, Pencil, Pin, PinOff, RotateCcw, Square, X, XCircle } from "lucide-react";
 import { getCurrentWindow, PhysicalPosition } from "@tauri-apps/api/window";
 import { ipc, on } from "../ipc";
 import { KNOWN_LANGUAGES } from "../knownLanguages";
@@ -59,6 +59,47 @@ function useOverlayDrag() {
   };
 }
 
+const MINI_MIN_W = 320; // keep in sync with MINI_MIN_WIDTH / MINI_MAX_WIDTH in settings.rs
+const MINI_MAX_W = 800;
+const MINI_DEFAULT_W = 400;
+
+/** Drag handle on the small pill's right edge: width only. The window follows
+ *  live; the width is saved when the drag ends. Double-click restores the
+ *  default width. */
+function ResizeEdge() {
+  const drag = useRef<{ x: number; w: number; frame: number | null; next: number } | null>(null);
+  const send = (w: number, commit: boolean) => void ipc.overlayResize(w, commit).catch(quiet);
+  return (
+    <div
+      className="overlay-resize"
+      title="Drag to resize · double-click to reset"
+      onPointerDown={(e) => {
+        if (e.button !== 0) return;
+        e.currentTarget.setPointerCapture(e.pointerId);
+        drag.current = { x: e.screenX, w: window.innerWidth, frame: null, next: window.innerWidth };
+      }}
+      onPointerMove={(e) => {
+        const d = drag.current;
+        if (!d || (e.buttons & 1) === 0) return;
+        d.next = Math.min(MINI_MAX_W, Math.max(MINI_MIN_W, Math.round(d.w + e.screenX - d.x)));
+        if (d.frame == null) {
+          d.frame = requestAnimationFrame(() => {
+            if (drag.current) drag.current.frame = null;
+            send(d.next, false);
+          });
+        }
+      }}
+      onPointerUp={(e) => {
+        const d = drag.current;
+        drag.current = null;
+        if (e.currentTarget.hasPointerCapture(e.pointerId)) e.currentTarget.releasePointerCapture(e.pointerId);
+        if (d) send(d.next, true);
+      }}
+      onDoubleClick={() => send(MINI_DEFAULT_W, true)}
+    />
+  );
+}
+
 /** Small header button. Stops the pointer so pressing it never starts a drag. */
 function HeadBtn(props: { label: string; onClick: () => void; children: React.ReactNode; disabled?: boolean }) {
   return (
@@ -78,6 +119,25 @@ function HeadBtn(props: { label: string; onClick: () => void; children: React.Re
 }
 
 const quiet = () => undefined;
+
+/** The overlay's mic button: starts dictation when idle, stops and inserts
+ *  while listening. Pressing it never starts a drag. */
+function MicBtn(props: { live: boolean; onClick: () => void }) {
+  const label = t(props.live ? "overlay.micStop" : "overlay.micStart");
+  return (
+    <button
+      type="button"
+      className={`overlay-mic${props.live ? " live" : ""}`}
+      aria-label={label}
+      title={label}
+      onPointerDown={(e) => e.stopPropagation()}
+      onDoubleClick={(e) => e.stopPropagation()}
+      onClick={props.onClick}
+    >
+      {props.live ? <Square size={11} fill="currentColor" /> : <Mic size={13} />}
+    </button>
+  );
+}
 
 const MENU_ROW = 27; // option height + gap
 const MENU_PAD = 10; // padding + border
@@ -257,6 +317,10 @@ export function Overlay() {
   const [level, setLevel] = useState(0);
   const mode = useSettings((s) => s.settings?.mode ?? "hold");
   const reviewBeforeInsert = useSettings((s) => s.settings?.reviewBeforeInsert ?? true);
+  const pinned = useSettings((s) => s.settings?.overlayPinned ?? false);
+  const mini = useSettings((s) => s.settings?.overlayMini ?? false);
+  const sizeLocked = useSettings((s) => s.settings?.overlaySizeLocked ?? false);
+  const shortcut = useSettings((s) => s.settings?.shortcut ?? "");
   const textRef = useRef<HTMLDivElement>(null);
   const editRef = useRef<HTMLTextAreaElement>(null);
   const previewRef = useRef(false);
@@ -315,6 +379,22 @@ export function Overlay() {
         if (e.error) setError(errorMessage(e.error.code, e.error.detail));
         if (e.result?.inserted) setText(e.result.inserted);
       }),
+      // A pinned overlay falls back to its idle card after each dictation.
+      on<null>("overlay://idle", () => {
+        previewRef.current = false;
+        reviewDoneRef.current = false;
+        reviewReadyRef.current = false;
+        draftRef.current = "";
+        draftDirty.current = false;
+        setState("idle");
+        setText("");
+        setError(null);
+        setTargetApp(null);
+        setCopied(false);
+        setReviewPreview(false);
+        setBands([]);
+        setLevel(0);
+      }),
       on<VoiceEvent>("voice://event", (e) => {
         if (e.type === "level") {
           setLevel(e.value);
@@ -365,17 +445,59 @@ export function Overlay() {
   }, [reviewEditorOpen]);
 
   const listening = state === "listening";
-  const targetTracking = listening
+  const idle = state === "idle";
+  const miniView = mini;
+  const targetTracking = !miniView && (listening
     || state === "transcribing"
     || state === "correcting"
-    || reviewEditorOpen;
-  let icon = (
+    || reviewEditorOpen);
+  // Small layout: what was heard floats above the pill like a subtitle, only
+  // while there is something to show. Its rectangle is added to the window's
+  // visible region (the same mechanism the language menu uses).
+  const subRef = useRef<HTMLDivElement>(null);
+  // In review it is the editor instead, so the pill never grows.
+  const showSub = miniView && (reviewEditorOpen || (!!text && ["listening", "transcribing", "correcting", "inserted"].includes(state)));
+  useEffect(() => {
+    const el = subRef.current;
+    if (!showSub || !el) return;
+    const ta = editRef.current;
+    if (reviewEditorOpen && ta) {
+      ta.style.height = "auto";
+      ta.style.height = `${Math.min(ta.scrollHeight, 110)}px`;
+    } else {
+      el.scrollTop = el.scrollHeight;
+    }
+    const report = () => {
+      const r = el.getBoundingClientRect();
+      void ipc.dictationOverlayMenu([r.left, r.top, r.width, r.height]).catch(quiet);
+    };
+    report();
+    // The pill's width can be dragged: follow it.
+    const ro = new ResizeObserver(report);
+    ro.observe(el);
+    return () => ro.disconnect();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [showSub, reviewEditorOpen, text, draft, state, reviewReady, error]);
+  useEffect(() => {
+    if (!showSub) return;
+    return () => void ipc.dictationOverlayMenu(null).catch(quiet);
+  }, [showSub]);
+  // Small pill: the free room shows the app the text goes into.
+  const miniApp = miniView && targetApp && ["listening", "transcribing", "correcting", "reviewing", "review"].includes(state) ? targetApp : null;
+  const micClick = () => void (listening ? ipc.dictationInsertNow(text) : ipc.dictationToggle()).catch(quiet);
+  let icon = listening ? (
+    <MicBtn live onClick={micClick} />
+  ) : (
     <span className="overlay-rec" aria-hidden>
       <Mic size={12} />
     </span>
   );
   let label = t("overlay.listeningLabel");
   switch (state) {
+    case "idle":
+      icon = <MicBtn live={false} onClick={micClick} />;
+      label = t("overlay.idle");
+      break;
     case "transcribing":
       icon = <span className="spinner" />;
       label = t("overlay.transcribing");
@@ -439,50 +561,7 @@ export function Overlay() {
       .catch((e: unknown) => setError(`Could not copy dictation text: ${String(e)}`));
   };
 
-  return (
-    <div className={`overlay-card${state === "inserted" ? " done" : ""}`} role="status" aria-live="polite">
-      {targetTracking && (
-        <div
-          className="overlay-app-tab"
-          title={targetApp ? t("overlay.targetWindow", { app: targetApp }) : t("overlay.targetUnknown")}
-          aria-label={targetApp ? t("overlay.targetWindow", { app: targetApp }) : t("overlay.targetUnknown")}
-        >
-          <span className="overlay-app-tab-label">
-            {targetApp ? (
-              <>
-                <span className="overlay-app-tab-prefix">{t("overlay.targetPrefix")}</span>{" "}
-                <span className="overlay-app-tab-app">{targetApp}</span>
-              </>
-            ) : (
-              <span className="overlay-app-tab-unknown">{t("overlay.targetUnknown")}</span>
-            )}
-          </span>
-        </div>
-      )}
-      {/* Header: what is happening, the language, and close. Drag to move;
-          double-click puts the overlay back in its default spot. */}
-      <div
-        className="overlay-head"
-        title={t("overlay.dragHint")}
-        onPointerDown={drag.onPointerDown}
-        onPointerMove={drag.onPointerMove}
-        onPointerUp={drag.onPointerUp}
-        onDoubleClick={() => void ipc.dictationResetOverlayPosition().catch(quiet)}
-      >
-        <span className="overlay-icon">{icon}</span>
-        <span className="overlay-label">{label}</span>
-        {listening && <VoiceBars bands={bands} level={level} label={t("voice.level")} />}
-        <span style={{ flex: 1 }} />
-        {(listening || state === "review") && (
-          <div className="overlay-pills">
-            <PillMenu label={t("overlay.language")} icon={<Globe size={12} aria-hidden />} value={language} options={languageOptions} onChange={changeLanguage} resetKey={state} searchable searchPlaceholder={t("overlay.searchLanguages")} />
-          </div>
-        )}
-        <HeadBtn label={`${t("voice.cancel")} (Esc)`} onClick={() => void ipc.dictationCancel().catch(quiet)}>
-          <X size={14} />
-        </HeadBtn>
-      </div>
-      {reviewEditorOpen ? (
+  const editorBody = (
         <>
           <textarea
             ref={editRef}
@@ -512,29 +591,112 @@ export function Overlay() {
               }
             }}
           />
+          <div className="overlay-hint overlay-review-keys">
+            {error ?? (!reviewReady ? t("overlay.reviewPending") : t("overlay.reviewKeys"))}
+          </div>
           <div className="overlay-actions">
-            <span className="overlay-hint">
-              {error ?? (!reviewReady ? t("overlay.reviewPending") : "")}
-            </span>
-            <button type="button" className="btn btn-sm btn-ghost" title={t("overlay.copyHint")} disabled={!reviewReady || !draft} onClick={copyDraft}>
-              <Copy size={13} /> {copied ? t("app.copied") : t("app.copy")}
-            </button>
-            <button type="button" className="btn btn-sm btn-ghost" title={t("overlay.retryHint")} disabled={!reviewReady} onClick={() => void ipc.dictationRetry().catch(quiet)}>
-              <RotateCcw size={13} /> {t("overlay.retry")}
-            </button>
-            <button type="button" className="btn btn-sm btn-primary" disabled={!reviewReady} onClick={confirm}>
+            <span style={{ flex: 1 }} />
+            <div className="overlay-btn-group" role="group">
+              <button type="button" className="btn btn-sm btn-ghost" title={t("overlay.copyHint")} disabled={!reviewReady || !draft} onClick={copyDraft}>
+                <Copy size={13} /> {copied ? t("app.copied") : t("app.copy")}
+              </button>
+              <button type="button" className="btn btn-sm btn-ghost" title={t("overlay.retryHint")} disabled={!reviewReady} onClick={() => void ipc.dictationRetry().catch(quiet)}>
+                <RotateCcw size={13} /> {t("overlay.retry")}
+              </button>
+              <button type="button" className="btn btn-sm btn-ghost" title={`${t("voice.cancel")} (Esc)`} onClick={() => void ipc.dictationCancel().catch(quiet)}>
+                <X size={13} /> {t("voice.cancel")}
+              </button>
+            </div>
+            <button type="button" className="btn btn-sm btn-primary" title={t("overlay.insertHint")} disabled={!reviewReady} onClick={confirm}>
               <Check size={13} /> {t("overlay.insert")}
             </button>
           </div>
         </>
-      ) : (
+  );
+
+  return (
+    <div className={`overlay-card${state === "inserted" ? " done" : ""}${miniView ? " mini" : ""}`} role="status" aria-live="polite">
+      {targetTracking && (
+        <div
+          className="overlay-app-tab"
+          title={targetApp ? t("overlay.targetWindow", { app: targetApp }) : t("overlay.targetUnknown")}
+          aria-label={targetApp ? t("overlay.targetWindow", { app: targetApp }) : t("overlay.targetUnknown")}
+        >
+          <span className="overlay-app-tab-label">
+            {targetApp ? (
+              <>
+                <span className="overlay-app-tab-prefix">{t("overlay.targetPrefix")}</span>{" "}
+                <span className="overlay-app-tab-app">{targetApp}</span>
+              </>
+            ) : (
+              <span className="overlay-app-tab-unknown">{t("overlay.targetUnknown")}</span>
+            )}
+          </span>
+        </div>
+      )}
+      {miniView && !sizeLocked && <ResizeEdge />}
+      {showSub &&
+        (reviewEditorOpen ? (
+          <div className="overlay-sub editing" ref={subRef}>
+            {editorBody}
+          </div>
+        ) : (
+          <div className="overlay-sub" ref={subRef} dir={textDir(text)}>
+            {text}
+          </div>
+        ))}
+      {/* Header: what is happening, the language, and close. Drag to move;
+          double-click puts the overlay back in its default spot. */}
+      <div
+        className="overlay-head"
+        title={t("overlay.dragHint")}
+        onPointerDown={drag.onPointerDown}
+        onPointerMove={drag.onPointerMove}
+        onPointerUp={drag.onPointerUp}
+        onDoubleClick={() => void ipc.dictationResetOverlayPosition().catch(quiet)}
+      >
+        <span className="overlay-icon">{icon}</span>
+        {miniView && listening && <VoiceBars bands={bands} level={level} label={t("voice.level")} />}
+        <span className={`overlay-label${miniApp ? " app" : ""}`} title={miniApp ? t("overlay.targetWindow", { app: miniApp }) : undefined}>
+          {miniApp ?? label}
+        </span>
+        {!miniView && listening && <VoiceBars bands={bands} level={level} label={t("voice.level")} />}
+        {!miniView && <span style={{ flex: 1 }} />}
+        {!miniView && (listening || state === "review") && (
+          <div className="overlay-pills">
+            <PillMenu label={t("overlay.language")} icon={<Globe size={12} aria-hidden />} value={language} options={languageOptions} onChange={changeLanguage} resetKey={state} searchable searchPlaceholder={t("overlay.searchLanguages")} />
+          </div>
+        )}
+        {!reviewEditorOpen && (
+          <HeadBtn label={t(mini ? "overlay.makeFull" : "overlay.makeMini")} onClick={() => void ipc.overlaySetMini(!mini).catch(quiet)}>
+            {mini ? <Maximize2 size={13} /> : <Minimize2 size={13} />}
+          </HeadBtn>
+        )}
+        {!(miniView && !idle) && (
+          <HeadBtn label={t(pinned ? "overlay.unpin" : "overlay.pin")} onClick={() => void ipc.overlaySetPinned(!pinned).catch(quiet)}>
+            {pinned ? <PinOff size={13} /> : <Pin size={13} />}
+          </HeadBtn>
+        )}
+        {/* Idle: closes the window (and unpins it); never quits the app. */}
+        <HeadBtn
+          label={idle ? t("overlay.close") : `${t("voice.cancel")} (Esc)`}
+          onClick={() => void (idle ? ipc.overlaySetPinned(false) : ipc.dictationCancel()).catch(quiet)}
+        >
+          <X size={14} />
+        </HeadBtn>
+      </div>
+      {reviewEditorOpen && !miniView ? (
+        editorBody      ) : miniView ? null : (
         <>
           <div className={`overlay-text${text ? "" : " empty"}`} ref={textRef} dir={text ? textDir(text) : "auto"}>
-            {text || t("overlay.speakNow")}
+            {text || (idle ? t("overlay.idleHint", { keys: shortcut.replace("CommandOrControl", "Ctrl") }) : t("overlay.speakNow"))}
           </div>
           {listening && (
             <div className="overlay-actions">
               <span className="overlay-hint">{keysHint}</span>
+              <button type="button" className="btn btn-sm btn-ghost" title={`${t("voice.cancel")} (Esc)`} onClick={() => void ipc.dictationCancel().catch(quiet)}>
+                <X size={13} /> {t("voice.cancel")}
+              </button>
               <button type="button" className="btn btn-sm btn-ghost" title={t("overlay.retryHint")} onClick={() => void ipc.dictationRetry().catch(quiet)}>
                 <RotateCcw size={13} /> {t("overlay.restart")}
               </button>

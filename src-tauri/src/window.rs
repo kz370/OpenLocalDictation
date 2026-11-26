@@ -2,7 +2,7 @@
 //! and the settings window.
 
 use crate::state::AppState;
-use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU32, AtomicU64, Ordering};
 use std::sync::Mutex;
 use tauri::{
     AppHandle, Emitter, LogicalSize, Manager, PhysicalPosition, WebviewUrl, WebviewWindow,
@@ -14,7 +14,7 @@ pub const OVERLAY: &str = "overlay";
 
 /// Logical size of the settings window; it never changes.
 const SETTINGS_W: f64 = 780.0;
-const SETTINGS_H: f64 = 690.0;
+const SETTINGS_H: f64 = 640.0;
 
 static SUPPRESS_UNTIL: AtomicU64 = AtomicU64::new(0);
 
@@ -108,8 +108,31 @@ pub fn open_settings(app: &AppHandle) -> tauri::Result<()> {
 /// so the card does not jump when a result opens for editing.
 const OVERLAY_W: f64 = 480.0;
 const OVERLAY_H: f64 = 176.0;
+/// Height of the small overlay; its width is `MINI_WIDTH` (a setting, dragged
+/// on its right edge).
+const MINI_H: f64 = 68.0;
 /// Gap between the card and the taskbar at the default spot (logical px).
 const OVERLAY_BOTTOM_GAP: f64 = 6.0;
+
+/// Whether the overlay window currently has the small layout.
+static MINI: AtomicBool = AtomicBool::new(false);
+/// Current width (logical px) of the small layout.
+static MINI_WIDTH: AtomicU32 = AtomicU32::new(400);
+
+/// Logical size of the card box in the current layout.
+fn card_dims() -> (f64, f64) {
+    if MINI.load(Ordering::Relaxed) {
+        (MINI_WIDTH.load(Ordering::Relaxed) as f64, MINI_H)
+    } else {
+        (OVERLAY_W, OVERLAY_H)
+    }
+}
+
+/// Small layout wanted right now. Review stays small too: its editor floats
+/// above the pill.
+fn wants_mini(app: &AppHandle) -> bool {
+    app.state::<AppState>().settings.get().overlay_mini
+}
 
 #[cfg(windows)]
 fn hwnd_of(raw: isize) -> windows::Win32::Foundation::HWND {
@@ -304,6 +327,9 @@ const MENU_ROOM: f64 = 240.0;
 
 /// The open language menu's rectangle in the window (logical x, y, w, h).
 static MENU_RECT: Mutex<Option<[f64; 4]>> = Mutex::new(None);
+/// The tooltip's rectangle, kept apart so it never replaces the menu or the
+/// subtitle bubble.
+static TIP_RECT: Mutex<Option<[f64; 4]>> = Mutex::new(None);
 /// Card margin inside the window and corner radius, the menu's corner radius,
 /// and the room left around the menu for its shadow (logical px; must match
 /// .overlay-card / .overlay-lang-menu).
@@ -319,9 +345,10 @@ fn room_px(w: &WebviewWindow) -> i32 {
     (MENU_ROOM * w.scale_factor().unwrap_or(1.0)).round() as i32
 }
 
-/// Window size for a card of logical height `card_h`.
-fn overlay_window_size(card_h: f64) -> LogicalSize<f64> {
-    LogicalSize::new(OVERLAY_W, card_h + 2.0 * MENU_ROOM)
+/// Window size for the current layout.
+fn overlay_window_size() -> LogicalSize<f64> {
+    let (w, h) = card_dims();
+    LogicalSize::new(w, h + 2.0 * MENU_ROOM)
 }
 
 /// Frameless windows keep their caption styles (for snapping and animations)
@@ -414,6 +441,7 @@ fn set_overlay_region(app: &AppHandle, w: &WebviewWindow, clip: bool) {
     let px = |v: f64| (v * scale).round() as i32;
     let room = room_px(w);
     let menu = *MENU_RECT.lock().unwrap_or_else(|p| p.into_inner());
+    let tip = *TIP_RECT.lock().unwrap_or_else(|p| p.into_inner());
     // SAFETY: plain Win32 calls on the overlay's own window handle. The menu
     // region is merged into the card's and freed; on success the system owns
     // the combined region, so it is not freed here.
@@ -438,9 +466,12 @@ fn set_overlay_region(app: &AppHandle, w: &WebviewWindow, clip: bool) {
                 px(10.0) * 2,
                 px(10.0) * 2,
             );
-            CombineRgn(Some(card), Some(card), Some(tab), RGN_OR);
+            // The small card has no destination-app tab above it.
+            if !MINI.load(Ordering::Relaxed) {
+                CombineRgn(Some(card), Some(card), Some(tab), RGN_OR);
+            }
             let _ = DeleteObject(HGDIOBJ(tab.0));
-            if let Some([x, y, mw, mh]) = menu {
+            for [x, y, mw, mh] in [menu, tip].into_iter().flatten() {
                 let s = MENU_SHADOW;
                 let d = px(MENU_RADIUS + s) * 2;
                 let rgn = CreateRoundRectRgn(
@@ -485,6 +516,20 @@ pub fn set_overlay_menu(app: &AppHandle, menu: Option<[f64; 4]>) {
     }
 }
 
+/// Adds a tooltip's rectangle to the visible part of the overlay, or takes it
+/// away again (`None`).
+pub fn set_overlay_tip(app: &AppHandle, tip: Option<[f64; 4]>) {
+    *TIP_RECT.lock().unwrap_or_else(|p| p.into_inner()) = tip;
+    if let Some(w) = app.get_webview_window(OVERLAY) {
+        let app2 = app.clone();
+        on_main(app, move || {
+            if w.is_visible().unwrap_or(false) {
+                set_overlay_region(&app2, &w, true);
+            }
+        });
+    }
+}
+
 /// Switches the overlay between listening (it never takes focus, so the app
 /// being dictated into keeps it) and review (focusable: the result is edited).
 pub fn set_overlay_review(app: &AppHandle, review: bool) {
@@ -495,7 +540,11 @@ pub fn set_overlay_review(app: &AppHandle, review: bool) {
 
 fn overlay_review_now(app: &AppHandle, w: &WebviewWindow, review: bool) {
     suppress_persistence();
-    *MENU_RECT.lock().unwrap_or_else(|p| p.into_inner()) = None;
+    // The small layout has no language menu; its editor above the pill lives
+    // in this rectangle and must survive the switch.
+    if !MINI.load(Ordering::Relaxed) {
+        *MENU_RECT.lock().unwrap_or_else(|p| p.into_inner()) = None;
+    }
     set_overlay_activatable(app, w, review);
     // The open language menu (if any) was dropped from the visible area above.
     set_overlay_region(app, w, true);
@@ -568,10 +617,8 @@ fn default_overlay_position(w: &WebviewWindow) -> Option<(i32, i32)> {
     let m = w.primary_monitor().ok().flatten()?;
     let area = m.work_area();
     let scale = m.scale_factor();
-    let (cw, ch) = (
-        (OVERLAY_W * scale).round() as i32,
-        (OVERLAY_H * scale).round() as i32,
-    );
+    let (lw, lh) = card_dims();
+    let (cw, ch) = ((lw * scale).round() as i32, (lh * scale).round() as i32);
     let x = area.position.x + (area.size.width as i32 - cw) / 2;
     // The visible card sits CARD_MARGIN inside its box; leave only a small gap
     // between it and the taskbar.
@@ -602,10 +649,8 @@ fn card_on_screen(w: &WebviewWindow, x: i32, y: i32) -> (i32, i32) {
         return (x, y);
     };
     let scale = m.scale_factor();
-    let size = (
-        (OVERLAY_W * scale).round() as u32,
-        (OVERLAY_H * scale).round() as u32,
-    );
+    let (lw, lh) = card_dims();
+    let size = ((lw * scale).round() as u32, (lh * scale).round() as u32);
     let area = m.work_area();
     clamp_into(
         (area.position.x, area.position.y),
@@ -619,7 +664,10 @@ fn show_overlay_now(app: &AppHandle, w: &WebviewWindow) {
     let saved = app.state::<AppState>().settings.get();
     suppress_persistence();
     *MENU_RECT.lock().unwrap_or_else(|p| p.into_inner()) = None;
-    let _ = w.set_size(overlay_window_size(OVERLAY_H));
+    *TIP_RECT.lock().unwrap_or_else(|p| p.into_inner()) = None;
+    MINI_WIDTH.store(saved.overlay_mini_width, Ordering::Relaxed);
+    MINI.store(wants_mini(app), Ordering::Relaxed);
+    let _ = w.set_size(overlay_window_size());
     let pos = match (saved.overlay_x, saved.overlay_y) {
         (Some(x), Some(y)) if on_any_monitor(w, x, y) => Some(card_on_screen(w, x, y)),
         _ => default_overlay_position(w),
@@ -655,6 +703,67 @@ pub fn hide_overlay(app: &AppHandle) {
     }
 }
 
+/// Applies a pin change: a pinned overlay appears now (idle), an unpinned idle
+/// one goes away. A running dictation is left alone.
+pub fn sync_overlay_pin(app: &AppHandle) {
+    let Ok(w) = create_overlay(app) else { return };
+    let app2 = app.clone();
+    on_main(app, move || {
+        let state = app2.state::<AppState>();
+        if state.voice.is_active() || state.dictation_busy.load(Ordering::Relaxed) {
+            return;
+        }
+        // Pinned: docks and shows. Unpinned: really hides.
+        hide_overlay_window(&app2, &w);
+    });
+}
+
+/// Opens the overlay as its idle card (tray entry): nothing is recorded until
+/// the shortcut or the mic button is used. A running dictation is left alone.
+pub fn show_idle_overlay(app: &AppHandle) {
+    let Ok(w) = create_overlay(app) else { return };
+    let app2 = app.clone();
+    on_main(app, move || {
+        let state = app2.state::<AppState>();
+        if state.voice.is_active() || state.dictation_busy.load(Ordering::Relaxed) {
+            return;
+        }
+        show_overlay_now(&app2, &w);
+        let _ = app2.emit_to(OVERLAY, "overlay://idle", ());
+    });
+}
+
+/// Sets the small overlay's width right away (a drag on its edge). Only the
+/// window changes here; the command saves it when the drag ends.
+pub fn resize_overlay_mini(app: &AppHandle, width: u32) {
+    let Some(w) = app.get_webview_window(OVERLAY) else {
+        return;
+    };
+    let app2 = app.clone();
+    on_main(app, move || {
+        if !MINI.load(Ordering::Relaxed) {
+            return;
+        }
+        suppress_persistence();
+        MINI_WIDTH.store(width, Ordering::Relaxed);
+        let _ = w.set_size(overlay_window_size());
+        set_overlay_region(&app2, &w, true);
+    });
+}
+
+/// Re-applies the small/full layout after the mini setting changed.
+pub fn refresh_overlay_layout(app: &AppHandle) {
+    let Some(w) = app.get_webview_window(OVERLAY) else {
+        return;
+    };
+    let app2 = app.clone();
+    on_main(app, move || {
+        if w.is_visible().unwrap_or(false) {
+            show_overlay_now(&app2, &w);
+        }
+    });
+}
+
 /// Hides only if the delayed dismissal still belongs to the current, idle
 /// dictation session. The check runs on the UI thread with the hide itself, so
 /// an old timer cannot hide an overlay a newer session has reopened.
@@ -685,7 +794,14 @@ fn overlay_hide_is_current_and_idle(
     scheduled_generation == current_generation && !dictation_active && !busy
 }
 
+/// Pinned overlays never hide: they fall back to their idle card (the page
+/// resets itself on `overlay://idle`). Nothing is listened to while idle.
 fn hide_overlay_window(app: &AppHandle, w: &WebviewWindow) {
+    if app.state::<AppState>().settings.get().overlay_pinned {
+        show_overlay_now(app, w);
+        let _ = app.emit_to(OVERLAY, "overlay://idle", ());
+        return;
+    }
     let _ = w.hide();
     // Showing it again changes its styles; that must not happen while clipped.
     set_overlay_region(app, w, false);

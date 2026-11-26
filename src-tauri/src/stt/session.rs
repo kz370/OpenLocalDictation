@@ -63,6 +63,8 @@ pub struct VoiceSessions {
     active: Mutex<Option<Active>>,
     /// The previous session's thread, joined by the next session (never by the UI).
     previous: Mutex<Option<std::thread::JoinHandle<()>>>,
+    /// Discard flag of that previous session, so its pending result can be dropped.
+    previous_discard: Mutex<Option<Arc<AtomicBool>>>,
     sessions: AtomicU64,
 }
 
@@ -85,6 +87,7 @@ impl VoiceSessions {
             emit,
             active: Mutex::new(None),
             previous: Mutex::new(None),
+            previous_discard: Mutex::new(None),
             sessions: AtomicU64::new(0),
         }
     }
@@ -96,6 +99,28 @@ impl VoiceSessions {
             *guard = None;
         }
         guard.is_some()
+    }
+
+    /// True while a stopped session is still transcribing its recording.
+    pub fn is_transcribing(&self) -> bool {
+        self.previous
+            .lock()
+            .unwrap_or_else(|p| p.into_inner())
+            .as_ref()
+            .is_some_and(|h| !h.is_finished())
+    }
+
+    /// Drops the result of the session that is still transcribing: its text is
+    /// never emitted. The transcription itself runs to its end.
+    pub fn cancel_transcription(&self) {
+        if let Some(d) = self
+            .previous_discard
+            .lock()
+            .unwrap_or_else(|p| p.into_inner())
+            .as_ref()
+        {
+            d.store(true, Ordering::Relaxed);
+        }
     }
 
     /// Starts listening; returns the new session's number.
@@ -173,6 +198,10 @@ impl VoiceSessions {
         };
         active.discard.store(discard, Ordering::Relaxed);
         active.stop.store(true, Ordering::Relaxed);
+        *self
+            .previous_discard
+            .lock()
+            .unwrap_or_else(|p| p.into_inner()) = Some(active.discard.clone());
         *self.previous.lock().unwrap_or_else(|p| p.into_inner()) = Some(active.thread);
         true
     }
@@ -438,6 +467,10 @@ impl SessionCtx {
                     &mut committed,
                     &super::clean_transcript(&rec.transcribe(&buffer)),
                 );
+            }
+            // Cancelled while transcribing (new dictation started): drop the text.
+            if self.discard.load(Ordering::Relaxed) {
+                return;
             }
             (self.emit)(VoiceEvent::Transcript {
                 text: committed.clone(),

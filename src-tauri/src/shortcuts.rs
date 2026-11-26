@@ -97,7 +97,22 @@ fn dispatch(app: &AppHandle, pressed: bool) {
     let hold = state.settings.get().mode == "hold";
     let active = state.voice.is_active();
     if pressed && !active {
-        start_dictation(app);
+        // The shortcut again while the last take is still being transcribed or
+        // waits for review: drop it and start a new recording. Blocking steps
+        // run off this thread.
+        if state.voice.is_transcribing() {
+            state.voice.cancel_transcription();
+            let app = app.clone();
+            thread::spawn(move || start_dictation(&app));
+        } else if window::discard_review(app) {
+            let app = app.clone();
+            thread::spawn(move || {
+                thread::sleep(Duration::from_millis(150));
+                start_dictation(&app);
+            });
+        } else {
+            start_dictation(app);
+        }
     } else if active && ((hold && !pressed) || (!hold && pressed)) {
         state.voice.stop(false);
     }

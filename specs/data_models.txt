@@ -20,6 +20,10 @@ Settings (settings.rs, stored in <data>\settings.json; unknown/missing fields fa
   silenceMs            u32      800                     clamped 300 .. 3000 (VAD min silence = utterance boundary)
   autoStopSilenceSecs  u32      8                       0 = never; max 120
   overlayX / overlayY  i32?     null                    last dragged card position, physical px
+  overlayPinned        bool     false                   overlay stays on screen, always on top; idle (mic closed) until shortcut or mic button
+  overlayMiniWidth     u32      400                     small overlay width, logical px, 320-800 (dragged on its right edge)
+  overlaySizeLocked    bool     false                   no resize handle on the small overlay
+  overlayMini          bool     false                   small overlay layout (400x68 pill; review editor floats above it)
 
 AppInfo            { version, paths{dataDir, logsDir}, hasNvidia, gpuName?, modelsDir, defaultModelsDir }
 AudioDevice        { id, name, isDefault }
@@ -71,5 +75,5 @@ Constants
   Audio: 16 kHz mono, 100 Hz one-pole high-pass, level = RMS mapped -60..0 dB, spectrum = 24 log bands 80 Hz..4 kHz.
   MIN_AUDIO_MS 350 · MAX_RECORDING 300 s · VAD window 512 samples · utterances are at most 20 s (VAD max_speech_duration), so Whisper never needs chunking.
   Typing: 16 ms per character (measured; faster drops characters), review focus delay 150 ms.
-  Overlay card 480 x 176 logical px; menu room 240 px above/below; settings window 780 x 690.
+  Overlay card 480 x 176 logical px; menu room 240 px above/below; settings window 780 x 640.
   Overlay linger after a take: 800 ms (inserted), 2200 ms (message).

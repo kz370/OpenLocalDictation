@@ -335,11 +335,12 @@ function ProcessingCard({ settings }: { settings: Settings }) {
   );
 }
 
-type Tab = "model" | "processing" | "dictation" | "app";
+type Tab = "model" | "processing" | "dictation" | "overlay" | "app";
 const TABS: { id: Tab; label: string }[] = [
   { id: "model", label: "Speech model" },
   { id: "processing", label: "Processing" },
   { id: "dictation", label: "Dictation" },
+  { id: "overlay", label: "Overlay" },
   { id: "app", label: "App" },
 ];
 
@@ -434,12 +435,12 @@ export function SettingsPage() {
               onChange={(v) => set((d) => void (d.mode = v))}
             />
           </Row>
-          <Row label="Language" hint="You can also change it in the overlay while dictating.">
+          <Row label="Language" hint={settings.shownLanguages?.length ? "Only your chosen languages are listed. Change them below." : "You can also change it in the overlay while dictating."}>
 <SearchSelect
               label="Language"
               placeholder="Search languages…"
               value={settings.language}
-              options={languageOptions}
+              options={settings.shownLanguages?.length ? languageOptions.filter((o) => o.value === "auto" || o.value === settings.language || settings.shownLanguages.includes(o.value)) : languageOptions}
               onChange={(v) => set((d) => void (d.language = v))}
             />
           </Row>
@@ -471,6 +472,20 @@ export function SettingsPage() {
           </Row>
           <Row label="Add a space after the text" htmlFor="sw-space">
             <Switch id="sw-space" label="Add a space after the text" checked={settings.addTrailingSpace} onChange={(v) => set((d) => void (d.addTrailingSpace = v))} />
+          </Row>
+        </Card>
+        )}
+
+        {tab === "overlay" && (
+        <Card title="Overlay">
+          <Row label="Pin the overlay" hint="Keeps the overlay on screen, always on top of other apps. It listens to nothing until you press the shortcut or its mic button." htmlFor="sw-pin">
+            <Switch id="sw-pin" label="Pin the overlay" checked={settings.overlayPinned} onChange={(v) => void ipc.overlaySetPinned(v)} />
+          </Row>
+          <Row label="Small overlay" hint="A compact pill with the mic and level meter. What you say shows above it, and review edits there too." htmlFor="sw-mini">
+            <Switch id="sw-mini" label="Small overlay" checked={settings.overlayMini} onChange={(v) => void ipc.overlaySetMini(v)} />
+          </Row>
+          <Row label="Lock the small overlay's size" hint="Off: drag the right edge of the small overlay to change its width (double-click the edge to reset it)." htmlFor="sw-lock">
+            <Switch id="sw-lock" label="Lock the small overlay's size" checked={settings.overlaySizeLocked} onChange={(v) => set((d) => void (d.overlaySizeLocked = v))} />
           </Row>
           <Row label="Overlay position" hint="Drag the overlay by its header to move it.">
             <button className="btn btn-sm" onClick={() => setConfirmPosition(true)}>

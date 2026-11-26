@@ -22,3 +22,21 @@ Files Processed: 65 — COMPLETE
 - [2026-11-26T17:10:00Z] SearchSelect: menu matches button again (340px wide in rows), no focus outline on the menu; long text still wraps.
 - [2026-11-26T17:20:00Z] Settings window height 750 -> 690, measured from the running app (Dictation tab, the tallest, ended ~90px above the bottom).
 - [2026-11-26T17:30:00Z] App icon (all src-tauri/icons files) and the settings header brand mark recoloured from teal to green; shape unchanged. Rebuild needed for the exe/tray icon.
+- [2026-11-26T18:00:00Z] Settings Language dropdown lists only the chosen languages when a set is chosen (plus Automatic and the current one).
+- [2026-11-26T18:30:00Z] Pinned (always-on-top, idle) and small overlay: settings overlayPinned/overlayMini, commands overlay_set_pinned/overlay_set_mini/dictation_toggle, overlay mic/pin/size buttons, Settings switches.
+- [2026-11-26T18:50:00Z] Tray 'Dictate' now 'Show dictation window' (idle overlay, no recording); idle overlay X closes the window via overlay_set_pinned(false).
+- [2026-11-26T19:10:00Z] Overlay: growing from the small to the full card (review) clamps the card into the work area, so it is no longer cut off at the screen bottom.
+- [2026-11-26T19:30:00Z] Overlay UI: stop button (square mic) while listening in both layouts; explicit Cancel button in the full listening row.
+- [2026-11-26T19:50:00Z] Shortcut during transcribing or review drops that take and starts a new recording (shortcuts.rs dispatch, VoiceSessions is_transcribing/cancel_transcription).
+- [2026-11-26T20:10:00Z] Tray left click opens the idle dictation window instead of Settings (Settings stays in the tray menu).
+- [2026-11-26T20:30:00Z] Cancel now returns a pinned overlay to its idle card after the message (hide_overlay_later on both cancelled paths); small overlay widened to 340 and shows the live words while listening.
+- [2026-11-26T21:00:00Z] Small overlay redesigned: 340x68 card with controls row and a two-line live-text area (idle hint, live words, results) instead of one truncated line.
+- [2026-11-26T21:30:00Z] Small overlay back to a 340x68 pill; live text is a subtitle bubble above it (shown only with text, region via dictation_overlay_menu).
+- [2026-11-26T21:45:00Z] Small overlay: level meter stretches over the pill's free width.
+- [2026-11-26T22:10:00Z] Small overlay: 400x68 pill with short meter and destination app name; review editor is the bubble above the pill (no more growth to the full card).
+- [2026-11-26T22:30:00Z] Small pill: level meter now sits next to the mic button, destination app name after it.
+- [2026-11-26T22:50:00Z] Review actions: Copy, Retry and new Cancel grouped as one connected button group beside Insert; small pill's app name centered in the free space.
+- [2026-11-26T23:10:00Z] Review editor shows its keys (Ctrl+Enter insert, Ctrl+Shift+Enter retry, Esc cancel) as a hint row and in button tooltips; the keys themselves are unchanged.
+- [2026-11-26T23:40:00Z] Small overlay: width-only resize handle (overlay_resize, overlayMiniWidth 320-800, overlaySizeLocked option in Settings). Themed tooltips (components/Tooltip.tsx) replace native title tooltips; overlay adds them to its region via dictation_overlay_tip.
+- [2026-11-27T00:00:00Z] Settings: overlay options (pin, small, lock size, position) moved from the Dictation tab to a new Overlay tab; the Dictation tab no longer overflows.
+- [2026-11-27T00:20:00Z] Settings window height 690 -> 640 (the Overlay tab split made the Dictation tab shorter).

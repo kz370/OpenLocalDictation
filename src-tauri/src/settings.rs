@@ -8,6 +8,10 @@ use std::sync::Mutex;
 
 pub const FILE: &str = "settings.json";
 
+/// Limits of the small overlay's width (logical px).
+pub const MINI_MIN_WIDTH: u32 = 320;
+pub const MINI_MAX_WIDTH: u32 = 800;
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "camelCase", default)]
 pub struct Settings {
@@ -41,6 +45,15 @@ pub struct Settings {
     pub auto_stop_silence_secs: u32,
     pub overlay_x: Option<i32>,
     pub overlay_y: Option<i32>,
+    /// Keep the overlay on screen (always on top) between dictations. It never
+    /// listens while idle: only the shortcut or its mic button start recording.
+    pub overlay_pinned: bool,
+    /// Use the small overlay (mic and level only; review still opens full size).
+    pub overlay_mini: bool,
+    /// Width of the small overlay in logical px (dragged on its right edge).
+    pub overlay_mini_width: u32,
+    /// Locks the small overlay's width: no resize handle.
+    pub overlay_size_locked: bool,
 }
 
 impl Default for Settings {
@@ -64,6 +77,10 @@ impl Default for Settings {
             auto_stop_silence_secs: 8,
             overlay_x: None,
             overlay_y: None,
+            overlay_pinned: false,
+            overlay_mini: false,
+            overlay_mini_width: 400,
+            overlay_size_locked: false,
         }
     }
 }
@@ -92,6 +109,9 @@ impl Settings {
         if self.shortcut.trim().is_empty() {
             self.shortcut = Settings::default().shortcut;
         }
+        self.overlay_mini_width = self
+            .overlay_mini_width
+            .clamp(MINI_MIN_WIDTH, MINI_MAX_WIDTH);
         self.vad_threshold = self.vad_threshold.clamp(0.2, 0.95);
         self.silence_ms = self.silence_ms.clamp(300, 3000);
         self.auto_stop_silence_secs = self.auto_stop_silence_secs.min(120);

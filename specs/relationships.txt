@@ -66,7 +66,7 @@ src/main.tsx | renders | src/pages/Overlay.tsx
 src/main.tsx | renders | src/pages/Settings.tsx
 src/main.tsx | calls | src/settingsStore.ts
 src/pages/Overlay.tsx | calls | src/ipc.ts
-src/pages/Overlay.tsx | listens | dictation://state, dictation://target, dictation://review-shortcut, voice://event
+src/pages/Overlay.tsx | listens | dictation://state, dictation://target, dictation://review-shortcut, voice://event, overlay://idle
 src/pages/Overlay.tsx | depends_on | src/knownLanguages.ts
 src/pages/Settings.tsx | calls | src/ipc.ts
 src/pages/Settings.tsx | listens | models://changed, models://download, gpu://changed, gpu://download
@@ -76,3 +76,4 @@ src/pages/Settings.tsx | depends_on | src/components/controls.tsx
 src/settingsStore.ts | listens | settings://changed
 src/settingsStore.ts | calls | ipc.getSettings, ipc.saveSettings
 src/components/ShortcutInput.tsx | calls | ipc.shortcutsCapture
+src/main.tsx | renders | src/components/Tooltip.tsx

@@ -28,12 +28,12 @@ gpu.rs             :: restart, launcher_exe, record_launcher, mark_healthy, prov
 hardware.rs        :: detect, HardwareInfo{has_nvidia,nvidia_name,inference_threads}, GpuInfo — DXGI adapter list.
 logging.rs         :: init — daily rolling file log (7 files), LOCAL_DICTATION_LOG env filter.
 autostart.rs       :: set_enabled, sync — start-with-Windows entry pointing at the installed exe, not the GPU copy.
-tray.rs            :: create, quit — tray menu (Dictate, Settings, Quit); left click opens settings.
+tray.rs            :: create, quit — tray menu (Show dictation window, Settings, Quit); left click opens the idle dictation window.
 shortcuts.rs       :: register_all, handle, dispatch, start_dictation, toggle_dictation, watch_dictation_target — hotkey (hold/toggle) and target tracking.
 shortcuts.rs       :: start_watcher (Windows), esc_pressed, is_modifier_only_shortcut, is_supported_modifier_only, windows_modifier_* — modifier-only combos (2+ modifiers) and Esc cancel.
 shortcuts.rs       :: register_review_shortcuts, unregister_all — review keys (Ctrl+Enter, Ctrl+Shift+Enter, Ctrl+Shift+Backspace) and recording release.
-window.rs          :: ensure_settings, open_settings — frameless fixed 780x690 settings window, hide-on-close.
-window.rs          :: create_overlay, show_overlay, hide_overlay, hide_overlay_if_session_idle, reset_overlay_position, cancel_dictation — overlay lifecycle and drag-position persistence.
+window.rs          :: ensure_settings, open_settings — frameless fixed 780x640 settings window, hide-on-close.
+window.rs          :: set_overlay_tip, resize_overlay_mini, create_overlay, show_overlay, hide_overlay, hide_overlay_if_session_idle, sync_overlay_pin, show_idle_overlay, refresh_overlay_layout, reset_overlay_position, cancel_dictation — overlay lifecycle and drag-position persistence.
 window.rs          :: set_overlay_review, discard_review, set_overlay_menu, set_overlay_region, strip_frame_styles, set_overlay_activatable — review focus, window region clip, menu room.
 window.rs          :: remember_target, refresh_dictation_target, restore_target, dictation_target_name, application_display_name, focus_hwnd — target-app capture and focus return.
 typing.rs          :: LiveTyper{set_target,finish,retract,snapshot,reset}, committed_prefix — live word-committed typing with desync recovery.
@@ -43,7 +43,7 @@ audio/capture.rs   :: Capture{start,stop}, CaptureEvent — cpal microphone thre
 audio/devices.rs   :: list_inputs, input_device, AudioDevice, is_loopback_name — microphone discovery without loopback devices.
 stt/mod.rs         :: SttService{is_ready,with_recognizer,unload,loaded_model}, whisper_language, clean_transcript — loaded recognizer cache; language switched in place.
 stt/engine.rs      :: detect, create, set_language, Recognizer, EngineOptions, WhisperFiles — sherpa-onnx offline Whisper; raw C call for language switch.
-stt/session.rs     :: VoiceSessions{start,stop,is_active}, VoiceEvent, SessionCtx, SilenceGuard — one listening session, VAD + worker transcription.
+stt/session.rs     :: VoiceSessions{start,stop,is_active,is_transcribing,cancel_transcription}, VoiceEvent, SessionCtx, SilenceGuard — one listening session, VAD + worker transcription.
 commands.rs        :: 25 IPC commands (see api_reference.md).
 
 ------------------------------------------------------------------------------
@@ -63,6 +63,7 @@ components/controls.tsx        :: Switch, Segmented, Dialog (themed modal), Erro
 components/layout.tsx          :: Card, Row.
 components/VoiceBars.tsx       :: VoiceBars — mirrored 24-band spectrum.
 components/ErrorBoundary.tsx   :: ErrorBoundary — shows a crash instead of a blank window.
+components/Tooltip.tsx         :: TooltipLayer — themed tooltips replacing native title tooltips; overlay reports their rectangle to the window region.
 styles/tokens.css              :: design tokens, light/dark/high-contrast, teal accent.
 styles/base.css                :: buttons, inputs, switch, segmented, badges, dialog, notices.
 styles/app.css                 :: settings shell, title bar, tabs, rows, cards, model list, overlay, dropdowns.

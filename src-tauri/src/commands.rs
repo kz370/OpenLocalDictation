@@ -32,10 +32,15 @@ pub fn save_settings(
     let saved = state.settings.update(|s| {
         // The overlay position is owned by dragging the overlay, not by this form.
         let (x, y, dir) = (s.overlay_x, s.overlay_y, s.models_dir.clone());
+        // Pin and mini are owned by the overlay commands, like the position.
+        let (pinned, mini, mini_w) = (s.overlay_pinned, s.overlay_mini, s.overlay_mini_width);
         *s = settings;
         s.models_dir = dir;
         s.overlay_x = x;
         s.overlay_y = y;
+        s.overlay_pinned = pinned;
+        s.overlay_mini = mini;
+        s.overlay_mini_width = mini_w;
     })?;
     if saved.model != before.model || saved.device != before.device {
         state.stt.unload();
@@ -456,10 +461,71 @@ pub fn dictation_set_language(
     Ok(())
 }
 
+/// Pins the overlay (stays on screen, always on top, idle until the shortcut or
+/// its mic button is used) or unpins it.
+#[tauri::command]
+pub fn overlay_set_pinned(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    pinned: bool,
+) -> CmdResult<()> {
+    let saved = state.settings.update(|s| s.overlay_pinned = pinned)?;
+    let _ = app.emit("settings://changed", &saved);
+    window::sync_overlay_pin(&app);
+    Ok(())
+}
+
+/// Switches the overlay between its small and full size.
+#[tauri::command]
+pub fn overlay_set_mini(app: AppHandle, state: State<'_, AppState>, mini: bool) -> CmdResult<()> {
+    let saved = state.settings.update(|s| s.overlay_mini = mini)?;
+    let _ = app.emit("settings://changed", &saved);
+    window::refresh_overlay_layout(&app);
+    Ok(())
+}
+
+/// Resizes the small overlay's width while its edge is dragged (`commit` false:
+/// window only) and saves it when the drag ends. Ignored while the size is locked.
+#[tauri::command]
+pub fn overlay_resize(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    width: u32,
+    commit: bool,
+) -> CmdResult<()> {
+    if state.settings.get().overlay_size_locked {
+        return Ok(());
+    }
+    let width = width.clamp(
+        crate::settings::MINI_MIN_WIDTH,
+        crate::settings::MINI_MAX_WIDTH,
+    );
+    window::resize_overlay_mini(&app, width);
+    if commit {
+        let saved = state.settings.update(|s| s.overlay_mini_width = width)?;
+        let _ = app.emit("settings://changed", &saved);
+    }
+    Ok(())
+}
+
+/// The overlay's mic button: starts dictation, or stops and inserts when
+/// already listening (tap style, like the tray entry).
+#[tauri::command]
+pub async fn dictation_toggle(app: AppHandle) {
+    let _ = tokio::task::spawn_blocking(move || shortcuts::toggle_dictation(&app)).await;
+}
+
 /// Clears the dragged overlay position, reverting to the default spot.
 #[tauri::command]
 pub fn dictation_reset_overlay_position(app: AppHandle) {
     window::reset_overlay_position(&app);
+}
+
+/// Shows a tooltip (logical x, y, width, height in the overlay window) outside
+/// the card, or hides that area again (`None`).
+#[tauri::command]
+pub fn dictation_overlay_tip(app: AppHandle, tip: Option<[f64; 4]>) {
+    window::set_overlay_tip(&app, tip);
 }
 
 /// Shows the overlay's open language menu (logical x, y, width, height in the

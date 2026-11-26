@@ -37,7 +37,7 @@ With review off, words are typed live as they are committed; "Insert" at the end
 * "Add a space after the text" appends one space to the final text.
 
 ### 2.5 Language
-The overlay's language pill (and Settings → Dictation → Language) selects Automatic or one of ~80 Whisper languages with a filter box. The choice is saved. Mid-take, changing it restarts the take. Whisper switches language on a loaded model in place (`stt::engine::set_language`, well under a millisecond) instead of reloading. Settings → Dictation → "Languages in the overlay menu" switches the overlay menu between All and a chosen set (dialog with checkboxes, checked languages grouped on top with a divider above the rest; `shownLanguages`, empty = all). The current language and Automatic are always listed.
+The overlay's language pill (and Settings → Dictation → Language) selects Automatic or one of ~80 Whisper languages with a filter box. The choice is saved. Mid-take, changing it restarts the take. Whisper switches language on a loaded model in place (`stt::engine::set_language`, well under a millisecond) instead of reloading. Settings → Dictation → "Languages in the overlay menu" switches the overlay menu between All and a chosen set (dialog with checkboxes, checked languages grouped on top with a divider above the rest; `shownLanguages`, empty = all). The current language and Automatic are always listed, and Settings → Language lists the same chosen set.
 
 ### 2.6 Models folder
 `modelsDir` points at a folder shared with other apps; nothing is moved or copied.
@@ -55,10 +55,10 @@ The overlay's language pill (and Settings → Dictation → Language) selects Au
 * Crash guard: if a GPU start dies before a model loads, the next launch switches `device` to `cpu`.
 
 ### 2.8 Settings window
-Frameless, fixed 780 x 690, no resize or maximize; own title bar (minimize, close-to-tray). Tabs: **Speech model** (folder + models), **Processing**, **Dictation** (shortcut, behaviour, language, microphone, review, insert method, trailing space, overlay position), **App** (start with Windows, theme, logs). The page never scrolls, and the model list is shown in full (the window height covers it). Every Reset button has an icon and asks first through the themed `Dialog`.
+Frameless, fixed 780 x 640, no resize or maximize; own title bar (minimize, close-to-tray). Tabs: **Speech model** (folder + models), **Processing**, **Dictation** (shortcut, behaviour, language, microphone, review, insert method, trailing space, overlay position), **App** (start with Windows, theme, logs). The page never scrolls, and the model list is shown in full (the window height covers it). Every Reset button has an icon and asks first through the themed `Dialog`.
 
 ### 2.9 Tray
-Left click opens settings. Menu: Dictate (start, or stop and insert), Settings, Quit. A second launch opens settings.
+Left click opens the idle dictation window. Menu: Show dictation window (opens the idle overlay; nothing is recorded until the shortcut or the mic button), Settings, Quit. A second launch opens settings.
 
 ## 3. Technical details
 
@@ -96,3 +96,16 @@ Tauri 2 (tray, global-shortcut, single-instance, dialog) · sherpa-onnx 1.13.8 (
 
 ## 6. Relationship to Open Local Assistant
 Independent repository, data folder (`%APPDATA%\com.localdictation.app`) and identifier (`com.localdictation.app`). The only contact: the CUDA pack of Open Local Assistant (`%APPDATA%\com.localassistant.app\gpu\cuda-1.13.8`) is linked when present, and models may live in a folder both apps point at.
+
+
+### Pinned and small overlay
+
+`overlayPinned` keeps the overlay window shown and always on top. `hide_overlay_window` (window.rs) then docks it as an idle card instead of hiding it and emits `overlay://idle`, which the page uses to reset itself. Nothing is recorded while idle: only the global shortcut, the tray entry or the overlay's mic button (`dictation_toggle`) start `voice.start()`. `overlayMini` switches the window to a 400 x 68 pill (mic, short level meter, destination app name, expand, pin, cancel, in that order; a subtitle bubble above the pill shows the live text, only while there is some, and is added to the window region through `dictation_overlay_menu`; no destination-app tab, no language menu). In review the same bubble becomes the editor (textarea, a hint row with the review keys, a Copy | Retry | Cancel button group, Insert), so the pill never grows; `set_overlay_review` keeps the bubble's region rectangle in the small layout. While listening the mic button becomes a stop (insert) button and the full card has a Cancel button (the header X cancels too). The Overlay tab of Settings has the pin, small, lock-size and position options; the overlay header has pin and size buttons.
+
+### Shortcut while busy
+
+Pressing the dictation shortcut while the last take is still transcribing (`VoiceSessions::is_transcribing`) drops that take (`cancel_transcription`: its `Transcript` is never emitted) and starts a new recording; while a result waits for review it discards the review and starts again. The new recording begins once the running transcription pass ends (it cannot be interrupted).
+
+### Resizable small overlay and tooltips
+
+The small pill has a drag handle on its right edge (width only, 320-800 px, double-click resets to 400). `overlay_resize` resizes the window live and saves the width on release; `overlaySizeLocked` (Settings, Overlay tab) removes the handle. Tooltips are themed: `src/components/Tooltip.tsx` (`TooltipLayer`, mounted once per window in `main.tsx`) replaces the native `title` tooltip by moving the text to `data-tip` while hovered and drawing a `.tooltip` using the theme tokens. In the overlay window the tooltip's rectangle is added to the window region through `dictation_overlay_tip`, so it can sit outside the card.
