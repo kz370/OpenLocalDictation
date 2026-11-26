@@ -12,7 +12,7 @@ src-tauri/           Rust backend (crate local-dictation, lib local_dictation_li
 specs/               source of truth (this folder)
 scripts/build.bat     release build + portable folder and zip + installer + release notes
 scripts/bump-version.bat (+ .ps1)  bumps the version everywhere and writes the release notes
-website/             project website (GitHub Pages), deployed by .github/workflows/pages.yml on push to master
+website/             project website (GitHub Pages), deployed by .github/workflows/pages.yml when a v* tag is pushed (or run by hand)
 local-dictation.iss  Inno Setup script
 AGENTS.md            contributor rules
 ```

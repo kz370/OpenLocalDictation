@@ -2,8 +2,7 @@ name: Deploy website
 
 on:
   push:
-    branches: [master]
-    paths: ["website/**", ".github/workflows/pages.yml"]
+    tags: ["v*"]
   workflow_dispatch:
 
 permissions:
