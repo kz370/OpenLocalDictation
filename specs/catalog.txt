@@ -31,11 +31,13 @@ autostart.rs       :: set_enabled, sync — start-with-Windows entry pointing at
 taskbar.rs         :: start, stop, set_state, set_x, set_language, set_languages, language_label, status, anchor, WidgetState, Event, Config - optional mic button + language indicator (capsule) inside the Windows taskbar, right click opens the language menu: own thread, native layered child window of Shell_TrayWnd, software-rendered (module draw), hover/click/drag input, Explorer-restart recovery. Stub on other targets.
 lib.rs             :: emit_state, start_taskbar_widget, taskbar_click, set_language - every dictation://state also drives the taskbar button; widget input is routed to the dictation toggle, the hover pill and the saved offset.
 window.rs          :: taskbar_anchor, anchored_geometry, focus_overlay, hide_idle_overlay - pill placement above the taskbar button (event overlay://anchor).
-commands.rs        :: taskbar_set_languages, taskbar_widget_status, taskbar_widget_reset_position, overlay_hide_idle.
+commands.rs        :: color_profiles, taskbar_set_languages, taskbar_widget_status, taskbar_widget_reset_position, overlay_hide_idle.
 mic.rs             :: MicStatus, check - is there a usable microphone: the chosen (else default) capture endpoint is active and not muted (IMMDevice / IAudioEndpointVolume), and Windows' microphone privacy switches do not say Deny.
 lib.rs             :: start_mic_watch - 2 s thread; on a change drives taskbar::set_mic_ok, tray::set_mic_status and the mic://status event.
 shortcuts.rs       :: start_dictation refuses to start without a usable microphone (error mic_missing / mic_muted / mic_blocked shown in the overlay).
-tray.rs            :: set_mic_status, tint_red - red tray icon and tooltip while the microphone is not usable.
+tray.rs            :: set_mic_status, tint_red, set_profile, refresh_icon - red tray icon and tooltip while the microphone is not usable, otherwise the app icon in the color profile.
+profile.rs         :: Profile, ProfileInfo, TrayTint, PROFILES, DEFAULT, index, ids, infos, tint_icon - the ten color profiles: one table for the taskbar button accents, the tray icon recoloring and (through color_profiles) the pages.
+src/profiles.ts    :: loadProfiles, useProfiles, useAppIcon, tintedIcon - injects the profiles' CSS variables and recolors the window's app icon.
 tray.rs            :: create, quit — tray menu (Show dictation window, Hide dictation window, Settings, Quit; no title entry); left click opens the idle dictation window.
 shortcuts.rs       :: register_all, handle, dispatch, start_dictation, toggle_dictation, watch_dictation_target — hotkey (hold/toggle) and target tracking.
 shortcuts.rs       :: start_watcher (Windows), esc_pressed, is_modifier_only_shortcut, is_supported_modifier_only, windows_modifier_* — modifier-only combos (2+ modifiers) and Esc cancel.

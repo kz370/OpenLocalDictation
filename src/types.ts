@@ -26,6 +26,8 @@ export interface Settings {
   reviewBeforeInsert: boolean;
   startWithOs: boolean;
   theme: "system" | "light" | "dark";
+  /** Id of a profile from `color_profiles` (profile.rs). */
+  colorProfile: string;
   vadThreshold: number;
   silenceMs: number;
   autoStopSilenceSecs: number;

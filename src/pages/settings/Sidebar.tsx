@@ -1,5 +1,6 @@
 import { useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
 import { Search } from "lucide-react";
+import { useAppIcon } from "../../profiles";
 
 export interface NavItem<Id extends string> {
   id: Id;
@@ -29,6 +30,7 @@ interface Props<Id extends string> {
 
 /** Left navigation: brand, settings search, the sections, and the shortcut and version at the foot. */
 export function Sidebar<Id extends string>({ items, active, onSelect, index, onJump, sectionLabel, shortcut, status }: Props<Id>) {
+  const appIcon = useAppIcon();
   const [query, setQuery] = useState("");
   const navRef = useRef<HTMLElement>(null);
   const q = query.trim().toLowerCase();
@@ -48,7 +50,7 @@ export function Sidebar<Id extends string>({ items, active, onSelect, index, onJ
     <aside className="sidebar">
       <div className="brand">
         <span className="brand-mark" aria-hidden>
-          <img src="/app-icon.png" alt="" />
+          <img src={appIcon} alt="" />
         </span>
         <span className="brand-name">Open Local Dictation</span>
       </div>

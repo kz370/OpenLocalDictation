@@ -1,11 +1,13 @@
-import { FileText, FolderOpen, Monitor, Moon, Palette, Power, SlidersHorizontal, Sun } from "lucide-react";
+import { Check, FileText, FolderOpen, Monitor, Moon, Palette, Power, SlidersHorizontal, Sun } from "lucide-react";
 import { ipc } from "../../ipc";
+import { useProfiles } from "../../profiles";
 import type { AppInfo, Settings } from "../../types";
 import { Segmented, Switch } from "../../components/controls";
 import { Card, Row } from "../../components/layout";
 import type { Update } from "./shared";
 
 export function AppPage({ settings, update, info }: { settings: Settings; update: Update; info: AppInfo | null }) {
+  const profiles = useProfiles();
   return (
     <Card title="App" icon={<SlidersHorizontal size={16} />}>
       <Row label="Start with Windows" icon={<Power size={16} />} htmlFor="sw-start">
@@ -22,6 +24,25 @@ export function AppPage({ settings, update, info }: { settings: Settings; update
           ]}
           onChange={(v) => update((d) => void (d.theme = v))}
         />
+      </Row>
+      <Row label="Color profile" icon={<Palette size={16} />} hint="The accent of the tray icon, the taskbar button and the app. Red for no microphone stays red.">
+        <div className="swatches" role="radiogroup" aria-label="Color profile">
+          {profiles.map((p) => (
+            <button
+              key={p.id}
+              type="button"
+              role="radio"
+              className="swatch"
+              aria-checked={settings.colorProfile === p.id}
+              aria-label={p.label}
+              title={p.label}
+              style={{ background: p.accentDark }}
+              onClick={() => update((d) => void (d.colorProfile = p.id))}
+            >
+              {settings.colorProfile === p.id && <Check size={13} color={p.inkDark} strokeWidth={3} aria-hidden />}
+            </button>
+          ))}
+        </div>
       </Row>
       <Row label="Logs" icon={<FileText size={16} />} hint={info ? `Version ${info.version}. Logs never contain what you dictate.` : undefined} end>
         <button className="btn btn-sm" onClick={() => void ipc.openLogs()}>

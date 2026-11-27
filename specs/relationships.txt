@@ -80,6 +80,13 @@ lib::emit_state | calls | taskbar::set_state
 lib::start_mic_watch | calls | mic::check
 lib::start_mic_watch | calls | taskbar::set_mic_ok
 lib::start_mic_watch | calls | tray::set_mic_status
+lib::apply_color_profile | calls | taskbar::set_profile
+lib::apply_color_profile | calls | tray::set_profile
+tray::refresh_icon | calls | profile::tint_icon
+taskbar::draw | reads | profile::PROFILES
+commands::color_profiles | calls | profile::infos
+src/main.tsx | calls | color_profiles
+src/pages/Settings.tsx | calls | color_profiles
 shortcuts::start_dictation | calls | mic::check
 commands::save_settings | calls | lib::start_taskbar_widget
 commands::save_settings | calls | taskbar::stop

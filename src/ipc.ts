@@ -2,6 +2,7 @@
 
 import { invoke } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
+import type { ColorProfile } from "./profiles";
 import type { AppErrorPayload, AppInfo, AudioDevice, GpuStatus, LoadedModel, ModelEntry, Settings, TaskbarStatus } from "./types";
 
 export function isAppError(e: unknown): e is AppErrorPayload {
@@ -15,6 +16,7 @@ export function toAppError(e: unknown): AppErrorPayload {
 
 export const ipc = {
   getSettings: () => invoke<Settings>("get_settings"),
+  colorProfiles: () => invoke<ColorProfile[]>("color_profiles"),
   saveSettings: (settings: Settings) => invoke<Settings>("save_settings", { settings }),
   shortcutErrors: () => invoke<string[]>("shortcut_errors"),
   shortcutsCapture: (capturing: boolean, reviewShortcuts?: boolean) => invoke<void>("shortcuts_capture", { capturing, reviewShortcuts: reviewShortcuts ?? false }),

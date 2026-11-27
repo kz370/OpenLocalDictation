@@ -16,6 +16,7 @@ Settings (settings.rs, stored in <data>\settings.json; unknown/missing fields fa
   reviewBeforeInsert   bool     true
   startWithOs          bool     false
   theme                string   "system"                "system" | "light" | "dark"
+  colorProfile         string   "teal"                  id of a profile in profile::PROFILES (teal, cyan, sky, blue, lime, gold, amber, graphite, slate, stone); unknown -> teal
   vadThreshold         f32      0.6                     clamped 0.2 .. 0.95
   silenceMs            u32      800                     clamped 300 .. 3000 (VAD min silence = utterance boundary)
   autoStopSilenceSecs  u32      8                       0 = never; max 120

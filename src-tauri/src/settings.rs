@@ -52,6 +52,9 @@ pub struct Settings {
     pub start_with_os: bool,
     /// "system" | "light" | "dark"
     pub theme: String,
+    /// Accent color profile (`profile::PROFILES`): the tray icon, the taskbar
+    /// button and the pages' accent. Red (no microphone) is never part of one.
+    pub color_profile: String,
     pub vad_threshold: f32,
     pub silence_ms: u32,
     /// Stop recording after this much silence (seconds, 0 = never).
@@ -113,6 +116,7 @@ impl Default for Settings {
             review_before_insert: true,
             start_with_os: false,
             theme: "system".into(),
+            color_profile: crate::profile::DEFAULT.into(),
             vad_threshold: 0.6,
             silence_ms: 800,
             auto_stop_silence_secs: 8,
@@ -169,6 +173,11 @@ impl Settings {
         self.mode = pick(&self.mode, &["hold", "toggle"], "hold");
         self.insert_method = pick(&self.insert_method, &["type", "paste"], "type");
         self.theme = pick(&self.theme, &["system", "light", "dark"], "system");
+        self.color_profile = pick(
+            &self.color_profile,
+            &crate::profile::ids(),
+            crate::profile::DEFAULT,
+        );
         if self.language.trim().is_empty() {
             self.language = "auto".into();
         }

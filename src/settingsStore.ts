@@ -21,6 +21,7 @@ export const useSettings = create<SettingsState>((set, get) => ({
     const s = await ipc.getSettings();
     set({ settings: s });
     applyTheme(s.theme);
+    applyProfile(s.colorProfile);
     return s;
   },
   update: async (mutate) => {
@@ -30,21 +31,30 @@ export const useSettings = create<SettingsState>((set, get) => ({
     mutate(draft);
     set({ settings: draft }); // optimistic
     applyTheme(draft.theme);
+    applyProfile(draft.colorProfile);
     try {
       const saved = await ipc.saveSettings(draft);
       set({ settings: saved, error: null, savedAt: Date.now() });
       applyTheme(saved.theme);
+      applyProfile(saved.colorProfile);
     } catch (e) {
       set({ settings: current, error: toAppError(e) });
       applyTheme(current.theme);
+      applyProfile(current.colorProfile);
     }
   },
   subscribe: () =>
     on<Settings>("settings://changed", (s) => {
       set({ settings: s });
       applyTheme(s.theme);
+      applyProfile(s.colorProfile);
     }),
 }));
+
+/** The accent color profile: `data-profile` on the root (tokens.css). */
+export function applyProfile(profile: string | undefined) {
+  document.documentElement.dataset.profile = profile ?? "teal";
+}
 
 let mediaListener: ((e: MediaQueryListEvent) => void) | null = null;
 

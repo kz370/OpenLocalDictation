@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react
 import { Brain, Check, Copy, Home, Languages, Mic, Minus, PictureInPicture2, SlidersHorizontal, Square, X } from "lucide-react";
 import { ipc, on } from "../ipc";
 import { useSettings } from "../settingsStore";
+import { useAppIcon } from "../profiles";
 import type { AppInfo, AudioDevice, GpuStatus, ModelEntry, Settings, TaskbarStatus } from "../types";
 import { ErrorNotice } from "../components/controls";
 import { prettyAccelerator } from "../components/ShortcutInput";
@@ -21,7 +22,7 @@ const SECTIONS: { id: Section; label: string; title: string; desc: string; icon:
   { id: "languages", label: "Languages", title: "Languages", desc: "Pick the language you speak, and a bigger model for the hard ones.", icon: <Languages size={16} /> },
   { id: "dictation", label: "Dictation", title: "Dictation", desc: "The shortcut, the microphone, and how the text is inserted.", icon: <Mic size={16} /> },
   { id: "overlay", label: "Overlay", title: "Overlay", desc: "How the small dictation window looks and where it sits.", icon: <PictureInPicture2 size={16} /> },
-  { id: "app", label: "App", title: "App", desc: "Start-up, theme and logs.", icon: <SlidersHorizontal size={16} /> },
+  { id: "app", label: "App", title: "App", desc: "Start-up, theme, color profile and logs.", icon: <SlidersHorizontal size={16} /> },
 ];
 
 /** Labels of the rows, for the sidebar search (they match the rows' `data-row`). */
@@ -51,6 +52,7 @@ const INDEX: SearchEntry<Section>[] = [
   { section: "overlay", label: "Reset positions", keywords: "reset default overlay taskbar button" },
   { section: "app", label: "Start with Windows", keywords: "autostart startup boot login" },
   { section: "app", label: "Theme", keywords: "dark light system colour" },
+  { section: "app", label: "Color profile", keywords: "colour accent tray icon taskbar teal blue amber lime gold graphite" },
   { section: "app", label: "Logs", keywords: "version open folder" },
 ];
 
@@ -61,6 +63,7 @@ const initialSection = (): Section => {
 };
 
 export function SettingsPage() {
+  const appIcon = useAppIcon();
   const [section, setSection] = useState<Section>(initialSection);
   const settings = useSettings((s) => s.settings);
   const update = useSettings((s) => s.update);
@@ -164,7 +167,7 @@ export function SettingsPage() {
     <div className="settings-shell">
       <header className="titlebar" data-tauri-drag-region>
         <span className="titlebar-title" data-tauri-drag-region>
-          <img className="app-icon-sm" src="/app-icon.png" alt="" aria-hidden /> Open Local Dictation
+          <img className="app-icon-sm" src={appIcon} alt="" aria-hidden /> Open Local Dictation
         </span>
         <div className="titlebar-buttons">
           <button type="button" className="icon-btn" aria-label="Minimize" title="Minimize" onClick={() => void ipc.settingsMinimize()}>

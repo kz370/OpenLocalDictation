@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from "react";
 import ReactDOM from "react-dom/client";
 import { useSettings } from "./settingsStore";
+import { loadProfiles } from "./profiles";
 import { ErrorBoundary } from "./components/ErrorBoundary";
 import { Overlay } from "./pages/Overlay";
 import { TooltipLayer } from "./components/Tooltip";
@@ -29,6 +30,7 @@ function Root() {
     let cancelled = false;
     let un: (() => void) | undefined;
     (async () => {
+      await loadProfiles();
       await useSettings.getState().load();
       const u = await useSettings.getState().subscribe();
       if (cancelled) u();

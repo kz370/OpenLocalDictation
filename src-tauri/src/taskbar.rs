@@ -86,6 +86,9 @@ pub struct LangItem {
 
 static LANGS: Mutex<Vec<LangItem>> = Mutex::new(Vec::new());
 
+/// The color profile's index in `profile::PROFILES`: the button's accent.
+static PROFILE: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
+
 /// The languages the menu offers (the overlay page knows their names and which
 /// ones are shown, and sends them whenever they change).
 pub fn set_languages(items: Vec<LangItem>) {
@@ -165,7 +168,7 @@ pub fn anchor() -> Option<Anchor> {
 }
 
 #[cfg(windows)]
-pub use imp::{set_language, set_mic_ok, set_state, set_x, start, stop};
+pub use imp::{set_language, set_mic_ok, set_profile, set_state, set_x, start, stop};
 
 #[cfg(not(windows))]
 pub fn start(_config: Config) {}
@@ -179,6 +182,8 @@ pub fn set_x(_x: Option<i32>) {}
 pub fn set_mic_ok(_ok: bool) {}
 #[cfg(not(windows))]
 pub fn set_language(_code: &str) {}
+#[cfg(not(windows))]
+pub fn set_profile(_id: &str) {}
 
 /// Drawing: pure software rendering into premultiplied BGRA, so the button has
 /// per-pixel alpha (soft edges, halo) without a graphics library.
@@ -336,10 +341,12 @@ mod draw {
     }
 
     fn palette(light_taskbar: bool) -> Palette {
+        let profile =
+            &crate::profile::PROFILES[super::PROFILE.load(std::sync::atomic::Ordering::Relaxed)];
         if light_taskbar {
             Palette {
-                accent: hex(0x0f766e),
-                accent_ink: hex(0xffffff),
+                accent: hex(profile.accent_light),
+                accent_ink: hex(profile.ink_light),
                 danger: hex(0xb42318),
                 danger_ink: hex(0xffffff),
                 success: hex(0x067647),
@@ -349,8 +356,8 @@ mod draw {
             }
         } else {
             Palette {
-                accent: hex(0x2dd4bf),
-                accent_ink: hex(0x04211e),
+                accent: hex(profile.accent_dark),
+                accent_ink: hex(profile.ink_dark),
                 danger: hex(0xf97066),
                 danger_ink: hex(0x3a1d1b),
                 success: hex(0x47cd89),
@@ -927,6 +934,23 @@ mod imp {
         if ctl != 0 {
             // SAFETY: as in `stop`.
             unsafe {
+                let _ = PostMessageW(Some(hwnd(ctl)), WM_MIC, WPARAM(0), LPARAM(0));
+            }
+        }
+    }
+
+    /// Sets the color profile (`profile::PROFILES` id): the button's accent.
+    /// Red (no microphone, listening) belongs to no profile.
+    pub fn set_profile(id: &str) {
+        let next = crate::profile::index(id);
+        if super::PROFILE.swap(next, Ordering::Relaxed) == next {
+            return;
+        }
+        let ctl = CTL.load(Ordering::SeqCst);
+        if ctl != 0 {
+            // SAFETY: as in `stop`.
+            unsafe {
+                // The same message as a microphone change: a redraw.
                 let _ = PostMessageW(Some(hwnd(ctl)), WM_MIC, WPARAM(0), LPARAM(0));
             }
         }

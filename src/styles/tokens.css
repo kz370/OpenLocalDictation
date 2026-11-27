@@ -123,6 +123,42 @@
   --overlay: rgba(0, 0, 0, 0.55);
 }
 
+/* Color profiles (Settings > App > Color profile). Teal is the default above.
+   Every other profile only supplies --p-light / --p-ink-light / --p-dark /
+   --p-ink-dark (injected from src-tauri/src/profile.rs by src/profiles.ts);
+   the accent tokens are derived from them here. Red (no microphone) belongs to
+   no profile, and high contrast keeps its own accent. */
+
+:root[data-profile]:not([data-profile="teal"]):not([data-contrast="high"])[data-theme="light"] {
+  --accent: var(--p-light);
+  --accent-hover: color-mix(in srgb, var(--p-light) 82%, black);
+  --accent-contrast: var(--p-ink-light);
+  --accent-soft: color-mix(in srgb, var(--p-light) 14%, white);
+  --accent-soft-text: color-mix(in srgb, var(--p-light) 55%, black);
+  --focus: var(--p-light);
+  --focus-ring: color-mix(in srgb, var(--p-light) 14%, transparent);
+  --glow-1: color-mix(in srgb, var(--p-light) 14%, transparent);
+  --glow-strong: color-mix(in srgb, var(--p-light) 30%, transparent);
+  --user-bubble: linear-gradient(145deg, color-mix(in srgb, var(--p-light) 80%, white), var(--p-light));
+  --user-bubble-text: var(--p-ink-light);
+  --user-bubble-shadow: color-mix(in srgb, var(--p-light) 22%, transparent);
+}
+
+:root[data-profile]:not([data-profile="teal"]):not([data-contrast="high"])[data-theme="dark"] {
+  --accent: var(--p-dark);
+  --accent-hover: color-mix(in srgb, var(--p-dark) 75%, white);
+  --accent-contrast: var(--p-ink-dark);
+  --accent-soft: color-mix(in srgb, var(--p-dark) 18%, #101514);
+  --accent-soft-text: color-mix(in srgb, var(--p-dark) 60%, white);
+  --focus: color-mix(in srgb, var(--p-dark) 75%, white);
+  --focus-ring: color-mix(in srgb, var(--p-dark) 12%, transparent);
+  --glow-1: color-mix(in srgb, var(--p-dark) 9%, transparent);
+  --glow-strong: color-mix(in srgb, var(--p-dark) 22%, transparent);
+  --user-bubble: var(--p-dark);
+  --user-bubble-text: var(--p-ink-dark);
+  --user-bubble-shadow: rgba(0, 0, 0, 0.25);
+}
+
 :root[data-contrast="high"][data-theme="light"],
 :root[data-contrast="high"]:not([data-theme]) {
   --bg: #ffffff;

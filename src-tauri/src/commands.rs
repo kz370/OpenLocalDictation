@@ -823,3 +823,9 @@ pub fn taskbar_widget_reset_position(app: AppHandle, state: State<'_, AppState>)
 pub fn overlay_hide_idle(app: AppHandle) {
     window::hide_idle_overlay(&app);
 }
+
+/// The color profiles (`profile.rs`), for the pages' accent and app icon.
+#[tauri::command]
+pub fn color_profiles() -> Vec<crate::profile::ProfileInfo> {
+    crate::profile::infos()
+}

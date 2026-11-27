@@ -1,5 +1,6 @@
 use crate::state::AppState;
 use crate::window;
+use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use tauri::menu::{Menu, MenuItem, PredefinedMenuItem};
 use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
 use tauri::{AppHandle, Emitter, Manager};
@@ -90,21 +91,47 @@ fn tint_red(rgba: &[u8]) -> Vec<u8> {
     out
 }
 
-/// Shows the microphone's state on the tray icon: red, with the problem in the
-/// tooltip, while there is no usable microphone; the normal icon otherwise.
-pub fn set_mic_status(app: &AppHandle, status: crate::mic::MicStatus) {
+static MIC_OK: AtomicBool = AtomicBool::new(true);
+/// The color profile's index in `profile::PROFILES`.
+static PROFILE: AtomicUsize = AtomicUsize::new(0);
+
+/// Sets the tray icon: red while there is no usable microphone (whatever the
+/// color profile), otherwise the app icon in the profile's color.
+fn refresh_icon(app: &AppHandle) {
     let Some(tray) = app.tray_by_id("main") else {
         return;
     };
     let Some(normal) = app.default_window_icon() else {
         return;
     };
-    let icon = if status.is_ok() {
-        normal.clone()
+    let rgba = if !MIC_OK.load(Ordering::Relaxed) {
+        tint_red(normal.rgba())
     } else {
-        tauri::image::Image::new_owned(tint_red(normal.rgba()), normal.width(), normal.height())
+        match crate::profile::PROFILES[PROFILE.load(Ordering::Relaxed)].tray {
+            Some(tint) => crate::profile::tint_icon(normal.rgba(), tint),
+            None => normal.rgba().to_vec(),
+        }
     };
+    let icon = tauri::image::Image::new_owned(rgba, normal.width(), normal.height());
     let _ = tray.set_icon(Some(icon));
+}
+
+/// Sets the color profile (`profile::PROFILES` id) the tray icon is drawn in.
+pub fn set_profile(app: &AppHandle, id: &str) {
+    let next = crate::profile::index(id);
+    if PROFILE.swap(next, Ordering::Relaxed) != next {
+        refresh_icon(app);
+    }
+}
+
+/// Shows the microphone's state on the tray icon: red, with the problem in the
+/// tooltip, while there is no usable microphone; the normal icon otherwise.
+pub fn set_mic_status(app: &AppHandle, status: crate::mic::MicStatus) {
+    let Some(tray) = app.tray_by_id("main") else {
+        return;
+    };
+    MIC_OK.store(status.is_ok(), Ordering::Relaxed);
+    refresh_icon(app);
     let tip = match status.problem() {
         Some(p) => format!("Open Local Dictation - {p}"),
         None => "Open Local Dictation".to_string(),

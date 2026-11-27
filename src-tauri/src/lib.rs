@@ -10,6 +10,7 @@ pub mod hardware;
 pub mod logging;
 pub mod mic;
 pub mod models;
+pub mod profile;
 pub mod settings;
 pub mod shortcuts;
 pub mod state;
@@ -108,6 +109,12 @@ pub(crate) fn set_language(app: &AppHandle, language: String) -> Result<(), erro
         tauri::async_runtime::spawn(retry_dictation(app.clone()));
     }
     Ok(())
+}
+
+/// Puts the color profile on the tray icon and the taskbar button.
+fn apply_color_profile(app: &AppHandle, id: &str) {
+    taskbar::set_profile(id);
+    tray::set_profile(app, id);
 }
 
 /// Watches the microphone for the life of the app: when it is unplugged,
@@ -489,15 +496,24 @@ pub fn run() {
             };
             autostart::sync(&handle, start_with_os);
             tray::create(&handle)?;
+            apply_color_profile(
+                &handle,
+                &handle.state::<AppState>().settings.get().color_profile,
+            );
             start_mic_watch(&handle);
             shortcuts::register_all(&handle);
             let _ = window::create_overlay(&handle);
             // Every settings change passes through this event: the taskbar
-            // button shows the language that is set.
-            handle.listen("settings://changed", |ev| {
+            // button shows the language that is set, the tray icon and the
+            // button the color profile.
+            let changed = handle.clone();
+            handle.listen("settings://changed", move |ev| {
                 if let Ok(v) = serde_json::from_str::<serde_json::Value>(ev.payload()) {
                     if let Some(code) = v.get("language").and_then(|l| l.as_str()) {
                         taskbar::set_language(code);
+                    }
+                    if let Some(id) = v.get("colorProfile").and_then(|p| p.as_str()) {
+                        apply_color_profile(&changed, id);
                     }
                 }
             });
@@ -523,6 +539,7 @@ pub fn run() {
         })
         .invoke_handler(tauri::generate_handler![
             commands::get_settings,
+            commands::color_profiles,
             commands::save_settings,
             commands::shortcut_errors,
             commands::shortcuts_capture,
