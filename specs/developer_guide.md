@@ -17,7 +17,7 @@ local-dictation.iss  Inno Setup script
 AGENTS.md            contributor rules
 ```
 
-Windows manifest: `src-tauri/build.rs` passes tauri-build a custom app manifest (common controls v6, as before, plus the Windows 10/11 `supportedOS` entry). Without that entry Windows treats the exe as pre-Windows 8, where a layered window cannot be a child window, and the taskbar button (`taskbar.rs`) would not be created. The `windows` crate features `Win32_System_LibraryLoader`, `Win32_System_Registry` and `Win32_UI_HiDpi` serve that module; `Win32_Media_Audio`, `Win32_Media_Audio_Endpoints` and `Win32_System_Com` serve `mic.rs`.
+Windows manifest: `src-tauri/build.rs` passes tauri-build a custom app manifest (common controls v6, as before, plus the Windows 10/11 `supportedOS` entry). Without that entry Windows treats the exe as pre-Windows 8, where a layered window cannot be a child window, and the taskbar button (`taskbar.rs`) would not be created. The `windows` crate features `Win32_System_LibraryLoader`, `Win32_System_Registry` and `Win32_UI_HiDpi` serve that module; `Win32_Media_Audio`, `Win32_Media_Audio_Endpoints` and `Win32_System_Com` serve `mic.rs`; `Win32_UI_Shell` gives `window.rs` `SetWindowSubclass` / `DefSubclassProc` for the overlay's frame-style veto.
 
 ## 3. Run
 ```text

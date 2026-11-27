@@ -467,6 +467,66 @@ fn strip_frame_styles(raw: isize) {
     }
 }
 
+/// Subclass id of `no_frame_proc` on the overlay window.
+#[cfg(windows)]
+const NO_FRAME_SUBCLASS: usize = 0x4F4C_4446;
+
+/// Takes the frame styles off the overlay for good. The window library puts
+/// them back on every style update (showing the window, changing focus), and
+/// any paint before `strip_frame_styles` ran again drew the classic Windows
+/// title bar and border over the whole window for a frame. This vetoes them
+/// as they are set (`WM_STYLECHANGING`), so the window can never have a frame
+/// to draw, whatever order the window calls run in. Runs on the main thread
+/// (a subclass belongs to the window's own thread).
+#[cfg(windows)]
+fn keep_frame_styles_off(raw: isize) {
+    use windows::Win32::UI::Shell::SetWindowSubclass;
+    if raw == 0 {
+        return;
+    }
+    // SAFETY: plain Win32 calls on the overlay's own window handle, from the
+    // thread that owns it; the subclass proc only rewrites the style struct
+    // Windows hands it and then defers to the next proc.
+    unsafe {
+        let _ = SetWindowSubclass(hwnd_of(raw), Some(no_frame_proc), NO_FRAME_SUBCLASS, 0);
+    }
+    strip_frame_styles(raw);
+}
+
+#[cfg(windows)]
+unsafe extern "system" fn no_frame_proc(
+    hwnd: windows::Win32::Foundation::HWND,
+    msg: u32,
+    wp: windows::Win32::Foundation::WPARAM,
+    lp: windows::Win32::Foundation::LPARAM,
+    _id: usize,
+    _data: usize,
+) -> windows::Win32::Foundation::LRESULT {
+    use windows::Win32::UI::Shell::DefSubclassProc;
+    use windows::Win32::UI::WindowsAndMessaging::{
+        GWL_EXSTYLE, GWL_STYLE, STYLESTRUCT, WM_STYLECHANGING, WS_CAPTION, WS_EX_CLIENTEDGE,
+        WS_EX_DLGMODALFRAME, WS_EX_STATICEDGE, WS_EX_WINDOWEDGE, WS_MAXIMIZEBOX, WS_MINIMIZEBOX,
+        WS_POPUP, WS_SYSMENU, WS_THICKFRAME,
+    };
+    if msg == WM_STYLECHANGING && lp.0 != 0 {
+        // SAFETY: for WM_STYLECHANGING, lParam points at a STYLESTRUCT the
+        // caller owns for the duration of the message, and it may be changed.
+        let s = unsafe { &mut *(lp.0 as *mut STYLESTRUCT) };
+        let which = wp.0 as i32;
+        if which == GWL_STYLE.0 {
+            let frame =
+                (WS_CAPTION | WS_THICKFRAME | WS_SYSMENU | WS_MINIMIZEBOX | WS_MAXIMIZEBOX).0;
+            s.styleNew = (s.styleNew & !frame) | WS_POPUP.0;
+        } else if which == GWL_EXSTYLE.0 {
+            let edges =
+                (WS_EX_DLGMODALFRAME | WS_EX_CLIENTEDGE | WS_EX_STATICEDGE | WS_EX_WINDOWEDGE).0;
+            s.styleNew &= !edges;
+        }
+    }
+    // SAFETY: hands the message on to the window's next procedure.
+    unsafe { DefSubclassProc(hwnd, msg, wp, lp) }
+}
+
 /// Lets the overlay take keyboard focus (review) or not (listening, so the app
 /// being dictated into keeps it). The window library's `set_focusable`
 /// rewrites every window style and redraws the frame, which flashed the
@@ -720,6 +780,11 @@ pub fn create_overlay(app: &AppHandle) -> tauri::Result<WebviewWindow> {
         .inner_size(OVERLAY_W, OVERLAY_H + 2.0 * MENU_ROOM)
         .decorations(false)
         .transparent(true)
+        // No GDI surface behind the page (WS_EX_NOREDIRECTIONBITMAP): with
+        // one, each time the window region opened after a show, Windows
+        // presented that surface white for a frame, a white pill flashing
+        // behind the pop-in. The page draws through WebView2 alone.
+        .no_redirection_bitmap(true)
         .shadow(false)
         .resizable(false)
         .always_on_top(true)
@@ -732,6 +797,11 @@ pub fn create_overlay(app: &AppHandle) -> tauri::Result<WebviewWindow> {
     // fire a Moved event at some OS-default position, which must not get
     // persisted as if the user had dragged it there.
     suppress_persistence();
+    #[cfg(windows)]
+    {
+        let app2 = app.clone();
+        on_main(app, move || keep_frame_styles_off(overlay_hwnd(&app2)));
+    }
     let h = app.clone();
     let w2 = w.clone();
     w.on_window_event(move |e| {
@@ -862,8 +932,9 @@ fn card_on_screen(w: &WebviewWindow, x: i32, y: i32) -> (i32, i32) {
 }
 
 fn show_overlay_now(app: &AppHandle, w: &WebviewWindow) {
-    // A real show takes over from a warm-up that is still running.
-    WARMING.store(false, Ordering::SeqCst);
+    // A real show takes over from a warm-up that is still running (its window
+    // is shown but clipped to nothing, so it counts as hidden below).
+    let warming = WARMING.swap(false, Ordering::SeqCst);
     let saved = app.state::<AppState>().settings.get();
     suppress_persistence();
     *MENU_RECT.lock().unwrap_or_else(|p| p.into_inner()) = None;
@@ -901,23 +972,32 @@ fn show_overlay_now(app: &AppHandle, w: &WebviewWindow) {
         }
         let _ = app.emit_to(OVERLAY, "overlay://anchor", serde_json::Value::Null);
     }
-    let was_visible = w.is_visible().unwrap_or(false);
+    let was_visible = !warming && w.is_visible().unwrap_or(false);
     // A zoom-out still playing is cancelled; the page must come back.
     HIDE_TOKEN.fetch_add(1, Ordering::SeqCst);
     let interrupted = HIDE_PENDING.swap(false, Ordering::SeqCst);
-    if anchored.is_some() {
-        // Nothing of the window is visible until the page has sent the pill's
-        // shape (it does so on the anchor event): clip it to nothing *before*
-        // it is shown, or its whole transparent box flashes for a frame.
-        *CARD_RECTS.lock().unwrap_or_else(|p| p.into_inner()) = Some(Vec::new());
+    if was_visible {
+        // Already on screen (the pointer came back to the taskbar button, a
+        // pin or layout change): keep the shapes it shows. Emptying them and
+        // showing again blanked the pill for a frame until the page re-sent
+        // them, a visible flicker.
+        set_overlay_region(app, w, true);
+    } else {
+        if anchored.is_some() {
+            // Nothing of the window is visible until the page has sent the
+            // pill's shape (it does so on the anchor event): clip it to
+            // nothing *before* it is shown, or its whole transparent box
+            // flashes for a frame.
+            *CARD_RECTS.lock().unwrap_or_else(|p| p.into_inner()) = Some(Vec::new());
+        }
+        // Frame styles off and an empty region while the window is shown, so
+        // nothing of a stale layout is painted.
+        set_overlay_region(app, w, true);
+        clip_overlay_to_nothing(app);
+        let _ = w.show();
+        // After showing: the real region.
+        set_overlay_region(app, w, true);
     }
-    // Frame styles off and an empty region while the window is shown: showing
-    // re-adds the styles, and any paint in between draws the title bar.
-    set_overlay_region(app, w, true);
-    clip_overlay_to_nothing(app);
-    let _ = w.show();
-    // After showing: strip the re-added frame styles, then the real region.
-    set_overlay_region(app, w, true);
     if !was_visible || interrupted {
         // The page plays its pop-in; a card that was already on screen stays put.
         let _ = app.emit_to(OVERLAY, "overlay://shown", ());

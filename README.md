@@ -68,11 +68,11 @@ the bottom of the screen is needed only for the optional taskbar button.
 
 ### First run
 
-No model is installed yet, so the Settings window opens on the **Speech model** tab. Download Whisper *tiny*,
+No model is installed yet, so the Settings window opens on the **Models** page. Download Whisper *tiny*,
 *base* or *small* (small is the most accurate and is marked *Recommended*), or point the app at a folder that
 already holds your models. Then press the shortcut in any app.
 
-<p align="center"><img src="website/screenshots/settings-model.webp" width="560" alt="Speech model tab"></p>
+<p align="center"><img src="website/screenshots/settings-model.webp" width="560" alt="Models page"></p>
 
 ## Using it
 
@@ -162,16 +162,20 @@ or by launching the app a second time.
 
 <table>
 <tr>
-<td width="50%"><b>Speech model</b><br>Download Whisper tiny, base or small, or point at a shared models folder.<br><img src="website/screenshots/settings-model.webp" alt="Speech model"></td>
-<td width="50%"><b>Processing</b><br>Run on the CPU or an NVIDIA GPU; install or reuse the CUDA libraries.<br><img src="website/screenshots/settings-processing.webp" alt="Processing"></td>
+<td width="50%"><b>Home</b><br>Is everything ready? The essentials at a glance, and a microphone level test.<br><img src="website/screenshots/settings-home.webp" alt="Home"></td>
+<td width="50%"><b>Models</b><br>Download Whisper models, keep several in memory, add your own, run on the CPU or an NVIDIA GPU.<br><img src="website/screenshots/settings-model.webp" alt="Models"></td>
 </tr>
 <tr>
-<td><b>Dictation</b><br>Shortcut, hold or toggle, language, microphone, review, typing or pasting.<br><img src="website/screenshots/settings-dictation.webp" alt="Dictation"></td>
-<td><b>Overlay</b><br>Taskbar button, pin, size, style, opacity, position and locking.<br><img src="website/screenshots/settings-overlay.webp" alt="Overlay"></td>
+<td width="50%"><b>Languages</b><br>Pick the language you speak and a bigger model for the hard ones.<br><img src="website/screenshots/settings-languages.webp" alt="Languages"></td>
+<td width="50%"><b>Dictation</b><br>Shortcut, hold or toggle, microphone, review, typing or pasting.<br><img src="website/screenshots/settings-dictation.webp" alt="Dictation"></td>
 </tr>
 <tr>
-<td><b>App</b><br>Start with Windows, theme (system, light, dark), logs.<br><img src="website/screenshots/settings-app.webp" alt="App"></td>
-<td><b>Light theme</b><br>The whole app follows the system theme or your choice.<br><img src="website/screenshots/settings-overlay-light.webp" alt="Overlay tab, light theme"></td>
+<td width="50%"><b>Overlay</b><br>Taskbar button, pin, size, style, opacity, position and locking.<br><img src="website/screenshots/settings-overlay.webp" alt="Overlay"></td>
+<td width="50%"><b>App</b><br>Start with Windows, theme (system, light, dark), logs.<br><img src="website/screenshots/settings-app.webp" alt="App"></td>
+</tr>
+<tr>
+<td width="50%"><b>Light theme</b><br>The whole app follows the system theme or your choice.<br><img src="website/screenshots/settings-overlay-light.webp" alt="Overlay page, light theme"></td>
+<td></td>
 </tr>
 </table>
 
@@ -192,7 +196,7 @@ folder, which **Settings > App > Logs** opens.
 
 | Symptom | Try |
 |---|---|
-| "No speech model is ready" | Open Settings > Speech model and download a model, or choose a models folder. |
+| "No speech model is ready" | Open Settings > Models and download a model, or choose a models folder. |
 | Red tray icon / "No microphone connected" | Plug the microphone in, or enable it in Windows Sound settings. |
 | "The microphone is muted" | Unmute it in Windows Sound settings. |
 | "Windows blocks the microphone" | Settings > Privacy & security > Microphone: allow access for desktop apps. |

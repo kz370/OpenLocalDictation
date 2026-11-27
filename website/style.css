@@ -133,6 +133,7 @@ h3 { font-size: 19px; margin: 0 0 6px; }
 /* Settings gallery */
 .tabs { display: grid; grid-template-columns: repeat(2, 1fr); gap: 28px; }
 .tabs figure { margin: 0; }
+.tabs figure:last-child:nth-child(odd) { grid-column: 1 / -1; justify-self: center; max-width: 520px; }
 .tabs figcaption { margin-top: 10px; color: var(--muted); font-size: 15px; }
 .tabs figcaption strong { color: var(--text); }
 
