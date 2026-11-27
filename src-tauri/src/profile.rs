@@ -56,10 +56,10 @@ const fn profile(
     }
 }
 
-/// The default first. Six accents that are clearly different from one another;
-/// grey is `slate`. (Red stays the microphone alert on the tray icon and the
-/// taskbar button: rose is a pink, and never replaces it.)
-pub const PROFILES: [Profile; 6] = [
+/// The default first. Five accents that are clearly different from one another;
+/// grey is `slate`. No red or pink: red is the microphone alert (tray icon and
+/// taskbar button) and the listening disc, and no accent may be mistaken for it.
+pub const PROFILES: [Profile; 5] = [
     profile(
         "teal",
         "Teal",
@@ -90,15 +90,6 @@ pub const PROFILES: [Profile; 6] = [
         0xfbbf24,
         0x2b1b02,
         tint(38.0, 1.0, 1.1),
-    ),
-    profile(
-        "rose",
-        "Rose",
-        0xbe123c,
-        0xffffff,
-        0xfb7185,
-        0x3f0a15,
-        tint(346.0, 0.9, 1.15),
     ),
     profile(
         "slate",
@@ -271,6 +262,31 @@ mod tests {
                 p.id
             );
             assert!(contrast(p.accent_dark, p.ink_dark) >= 4.5, "{} dark", p.id);
+        }
+    }
+
+    #[test]
+    fn no_accent_is_close_to_the_alert_red() {
+        for p in &PROFILES {
+            for c in [p.accent_light, p.accent_dark] {
+                let (r, g, b) = (
+                    (c >> 16 & 0xff) as f32,
+                    (c >> 8 & 0xff) as f32,
+                    (c & 0xff) as f32,
+                );
+                let (h, s, _) = rgb_to_hsl(r / 255.0, g / 255.0, b / 255.0);
+                // Hues from pink (320) through red to a reddish orange (20).
+                let reddish = h >= 320.0 || h <= 20.0;
+                assert!(!reddish || s < 0.2, "{} is too close to red", p.id);
+            }
+            if let Some(t) = p.tray {
+                let reddish = t.hue >= 320.0 || t.hue <= 20.0;
+                assert!(
+                    !reddish || t.sat < 0.2,
+                    "{} tray icon is too close to red",
+                    p.id
+                );
+            }
         }
     }
 
