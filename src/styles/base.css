@@ -283,12 +283,11 @@ a {
   display: flex;
   flex-wrap: wrap;
   justify-content: flex-end;
-  gap: 8px;
-  max-width: 260px;
+  gap: 10px;
 }
 .swatch {
-  width: 24px;
-  height: 24px;
+  width: 26px;
+  height: 26px;
   padding: 0;
   border: 0;
   border-radius: 50%;
@@ -296,18 +295,19 @@ a {
   align-items: center;
   justify-content: center;
   cursor: pointer;
-  box-shadow: 0 0 0 1px var(--border-strong);
+  background: linear-gradient(145deg, color-mix(in srgb, var(--sw) 72%, white), var(--sw));
+  box-shadow: inset 0 1px 1px rgba(255, 255, 255, 0.35), 0 1px 3px rgba(0, 0, 0, 0.35);
   transition: transform var(--dur-fast) var(--ease), box-shadow var(--dur-fast) var(--ease);
 }
 .swatch:hover {
   transform: scale(1.1);
 }
 .swatch[aria-checked="true"] {
-  box-shadow: 0 0 0 2px var(--surface), 0 0 0 4px var(--text-muted);
+  box-shadow: 0 0 0 2px var(--surface), 0 0 0 4px var(--text), 0 1px 3px rgba(0, 0, 0, 0.35);
 }
 .swatch:focus-visible {
   outline: 2px solid var(--focus);
-  outline-offset: 3px;
+  outline-offset: 5px;
 }
 
 input[type="range"] {

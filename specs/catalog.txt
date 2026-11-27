@@ -36,7 +36,7 @@ mic.rs             :: MicStatus, check - is there a usable microphone: the chose
 lib.rs             :: start_mic_watch - 2 s thread; on a change drives taskbar::set_mic_ok, tray::set_mic_status and the mic://status event.
 shortcuts.rs       :: start_dictation refuses to start without a usable microphone (error mic_missing / mic_muted / mic_blocked shown in the overlay).
 tray.rs            :: set_mic_status, tint_red, set_profile, refresh_icon - red tray icon and tooltip while the microphone is not usable, otherwise the app icon in the color profile.
-profile.rs         :: Profile, ProfileInfo, TrayTint, PROFILES, DEFAULT, index, ids, infos, tint_icon - the ten color profiles: one table for the taskbar button accents, the tray icon recoloring and (through color_profiles) the pages.
+profile.rs         :: Profile, ProfileInfo, TrayTint, PROFILES, DEFAULT, index, ids, infos, tint_icon - the six color profiles: one table for the taskbar button accents, the tray icon recoloring and (through color_profiles) the pages.
 src/profiles.ts    :: loadProfiles, useProfiles, useAppIcon, tintedIcon - injects the profiles' CSS variables and recolors the window's app icon.
 tray.rs            :: create, quit — tray menu (Show dictation window, Hide dictation window, Settings, Quit; no title entry); left click opens the idle dictation window.
 shortcuts.rs       :: register_all, handle, dispatch, start_dictation, toggle_dictation, watch_dictation_target — hotkey (hold/toggle) and target tracking.

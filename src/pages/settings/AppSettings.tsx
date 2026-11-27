@@ -1,3 +1,4 @@
+import type React from "react";
 import { Check, FileText, FolderOpen, Monitor, Moon, Palette, Power, SlidersHorizontal, Sun } from "lucide-react";
 import { ipc } from "../../ipc";
 import { useProfiles } from "../../profiles";
@@ -25,8 +26,8 @@ export function AppPage({ settings, update, info }: { settings: Settings; update
           onChange={(v) => update((d) => void (d.theme = v))}
         />
       </Row>
-      <Row label="Color profile" icon={<Palette size={16} />} hint="The accent of the tray icon, the taskbar button and the app. Red for no microphone stays red.">
-        <div className="swatches" role="radiogroup" aria-label="Color profile">
+      <Row label="Accent colour" icon={<Palette size={16} />} hint="The accent of the tray icon, the taskbar button and the app. Red for no microphone stays red.">
+        <div className="swatches" role="radiogroup" aria-label="Accent colour">
           {profiles.map((p) => (
             <button
               key={p.id}
@@ -36,7 +37,7 @@ export function AppPage({ settings, update, info }: { settings: Settings; update
               aria-checked={settings.colorProfile === p.id}
               aria-label={p.label}
               title={p.label}
-              style={{ background: p.accentDark }}
+              style={{ "--sw": p.accentDark } as React.CSSProperties}
               onClick={() => update((d) => void (d.colorProfile = p.id))}
             >
               {settings.colorProfile === p.id && <Check size={13} color={p.inkDark} strokeWidth={3} aria-hidden />}

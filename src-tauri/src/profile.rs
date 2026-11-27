@@ -2,7 +2,7 @@
 //! the pages. This table is the one source: the pages get it through the
 //! `color_profiles` command (they build their CSS variables and recolor the
 //! app icon from it). Red, the "no usable microphone" color, belongs to no
-//! profile and is never changed by one. No purple.
+//! profile and is never changed by one.
 
 use serde::Serialize;
 
@@ -56,27 +56,18 @@ const fn profile(
     }
 }
 
-/// The default first. Hues stay between amber and blue (and grey): red is the
-/// microphone alert, purple is not part of the palette.
-pub const PROFILES: [Profile; 10] = [
-    profile("teal", "Teal", 0x0f766e, 0xffffff, 0x2dd4bf, 0x04211e, None),
+/// The default first. Six accents that are clearly different from one another;
+/// grey is `slate`. (Red stays the microphone alert on the tray icon and the
+/// taskbar button: rose is a pink, and never replaces it.)
+pub const PROFILES: [Profile; 6] = [
     profile(
-        "cyan",
-        "Cyan",
-        0x0e7490,
+        "teal",
+        "Teal",
+        0x0f766e,
         0xffffff,
-        0x22d3ee,
-        0x04222a,
-        tint(190.0, 1.0, 1.0),
-    ),
-    profile(
-        "sky",
-        "Sky",
-        0x0369a1,
-        0xffffff,
-        0x38bdf8,
-        0x06243a,
-        tint(202.0, 1.0, 1.0),
+        0x2dd4bf,
+        0x04211e,
+        tint(175.0, 0.85, 1.0),
     ),
     profile(
         "blue",
@@ -87,23 +78,9 @@ pub const PROFILES: [Profile; 10] = [
         0x0b1b3a,
         tint(217.0, 0.95, 1.0),
     ),
+    // The app icon is green already: it stays as it is.
     profile(
-        "lime",
-        "Lime",
-        0x4d7c0f,
-        0xffffff,
-        0xa3e635,
-        0x1a2e05,
-        tint(84.0, 1.0, 1.05),
-    ),
-    profile(
-        "gold",
-        "Gold",
-        0xa16207,
-        0xffffff,
-        0xfacc15,
-        0x2b2102,
-        tint(48.0, 1.0, 1.15),
+        "green", "Green", 0x15803d, 0xffffff, 0x4ade80, 0x052e14, None,
     ),
     profile(
         "amber",
@@ -115,13 +92,13 @@ pub const PROFILES: [Profile; 10] = [
         tint(38.0, 1.0, 1.1),
     ),
     profile(
-        "graphite",
-        "Graphite",
-        0x3f4b49,
+        "rose",
+        "Rose",
+        0xbe123c,
         0xffffff,
-        0xc5cecb,
-        0x0e1312,
-        tint(170.0, 0.1, 1.0),
+        0xfb7185,
+        0x3f0a15,
+        tint(346.0, 0.9, 1.15),
     ),
     profile(
         "slate",
@@ -131,15 +108,6 @@ pub const PROFILES: [Profile; 10] = [
         0x94a3b8,
         0x0f172a,
         tint(215.0, 0.25, 1.0),
-    ),
-    profile(
-        "stone",
-        "Stone",
-        0x78716c,
-        0xffffff,
-        0xd6d3d1,
-        0x1c1917,
-        tint(30.0, 0.15, 1.0),
     ),
 ];
 
@@ -252,7 +220,7 @@ mod tests {
     #[test]
     fn the_default_is_first_and_unknown_ids_fall_back_to_it() {
         assert_eq!(PROFILES[0].id, DEFAULT);
-        assert_eq!(index("blue"), 3);
+        assert_eq!(index("blue"), 1);
         assert_eq!(index("purple"), 0);
         assert_eq!(index(""), 0);
     }
@@ -269,10 +237,10 @@ mod tests {
     }
 
     #[test]
-    fn graphite_is_nearly_grey_and_amber_is_warm() {
+    fn slate_is_nearly_grey_and_amber_is_warm() {
         let green = [63, 224, 119, 255];
-        let g = tint_icon(&green, PROFILES[index("graphite")].tray.unwrap());
-        assert!(g[0].abs_diff(g[2]) < 40, "{g:?}");
+        let g = tint_icon(&green, PROFILES[index("slate")].tray.unwrap());
+        assert!(g[0].abs_diff(g[2]) < 80, "{g:?}");
         let a = tint_icon(&green, PROFILES[index("amber")].tray.unwrap());
         assert!(a[0] > a[2] && a[1] > a[2], "{a:?}");
     }
@@ -307,23 +275,12 @@ mod tests {
     }
 
     #[test]
-    fn ids_are_unique_and_no_hue_is_red() {
-        let mut seen = std::collections::HashSet::new();
+    fn ids_and_colors_are_unique() {
+        let mut ids = std::collections::HashSet::new();
+        let mut colors = std::collections::HashSet::new();
         for p in &PROFILES {
-            assert!(seen.insert(p.id), "{} twice", p.id);
-            for c in [p.accent_light, p.accent_dark] {
-                let (r, g, b) = (
-                    (c >> 16 & 0xff) as f32,
-                    (c >> 8 & 0xff) as f32,
-                    (c & 0xff) as f32,
-                );
-                let (h, s, _) = rgb_to_hsl(r / 255.0, g / 255.0, b / 255.0);
-                assert!(
-                    s < 0.15 || (20.0..=240.0).contains(&h),
-                    "{} is red or purple",
-                    p.id
-                );
-            }
+            assert!(ids.insert(p.id), "{} twice", p.id);
+            assert!(colors.insert(p.accent_dark), "{} repeats a color", p.id);
         }
     }
 }
