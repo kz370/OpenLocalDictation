@@ -82,6 +82,7 @@ There is **no** command that removes the CUDA libraries.
 | `overlay://shown` | `()` | overlay | The overlay window was just shown from hidden (or a pending zoom-out was cancelled); the page reveals the card with its pop-in zoom. |
 | `overlay://anchor` | `{ x, y }` or `null` | overlay | Sent before each show: the taskbar button's center in the overlay window (logical px) while the pill is anchored to it (the page draws no circle, forces the small bubble layout and pops the pill out of that point), or `null` when not anchored. |
 | `overlay://widget-hover` | `bool` | overlay | The pointer rested on the taskbar button (`true`, after 300 ms) or left it (`false`). |
+| `overlay://tray-open` | `bool` | overlay | The tray opened the pill above the taskbar button and it stays open without a hover (`true`), or another window came to the front and it may go (`false`). |
 | `mic://status` | `"ok" | "muted" | "missing" | "blocked"` | all | The microphone's usability changed (checked every 2 s by `lib::start_mic_watch`); the tray icon and the taskbar button are red unless `ok`. |
 | `taskbar://status` | `TaskbarStatus` | all | The taskbar button was placed, lost its taskbar (Explorer restart) or cannot be placed. |
 | `overlay://hiding` | `()` | overlay | A close was requested: the page plays a 180 ms zoom-out. The window hides after `CLOSE_ANIM_MS` (210 ms) unless it is shown again meanwhile. |

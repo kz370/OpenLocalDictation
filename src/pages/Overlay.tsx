@@ -549,6 +549,10 @@ export function Overlay() {
   const headRef = useRef<HTMLDivElement>(null);
   // Small idle pill folds to a circle; a short hover unfolds it.
   const [hover, setHover] = useState(false);
+  // The tray opened the pill above the taskbar button: it stays open without
+  // a hover until another window comes to the front, or its X / the tray's
+  // "Hide" closes it (Rust sends `overlay://tray-open` false, or hides).
+  const [trayOpen, setTrayOpen] = useState(false);
   // 0 = never shown since load; 1/2 alternate so each show restarts the pop-in.
   const [pop, setPop] = useState<0 | 1 | 2>(0);
   // True between a hide and the next show: the card is invisible so it never
@@ -663,12 +667,14 @@ export function Overlay() {
         if (h) setHover(true);
         else hoverTimer.current = window.setTimeout(() => setHover(false), HOVER_CLOSE_MS);
       }),
+      on<boolean>("overlay://tray-open", (open) => setTrayOpen(open)),
       // The window is about to hide: go back to a clean idle page now, while
       // nobody sees it, so the next show starts bare (no stale pill, hover or
       // result) and invisible until its pop-in.
       on<null>("overlay://hidden", () => {
         window.clearTimeout(hoverTimer.current);
         setHover(false);
+        setTrayOpen(false);
         previewRef.current = false;
         reviewDoneRef.current = false;
         reviewReadyRef.current = false;
@@ -767,10 +773,11 @@ export function Overlay() {
   // Bubble style: a mic circle stays on screen; the pill (without the mic)
   // shows above it while dictating, while hovered or while its menu is open.
   const bubble = miniView && (overlayStyle === "bubble" || anchored);
-  const pillShown = (!bubble || !idle || (hover && !ctrlHeld) || langOpen) && !(anchored && closing);
+  const pillShown =
+    (!bubble || !idle || (hover && !ctrlHeld) || langOpen || (anchored && trayOpen)) && !(anchored && closing);
   // The pill opened by pointing at the taskbar button goes again once the
-  // pointer has left both (and no menu is open).
-  const keepPill = hover || langOpen;
+  // pointer has left both (and no menu is open, and the tray did not open it).
+  const keepPill = hover || langOpen || (anchored && trayOpen);
   const keptPill = useRef(false);
   useEffect(() => {
     const was = keptPill.current;

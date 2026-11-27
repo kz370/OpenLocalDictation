@@ -1073,6 +1073,146 @@ pub fn show_idle_overlay(app: &AppHandle) {
     });
 }
 
+/// The tray's "Show dictation window" entry and a left click on the tray icon.
+/// Without the taskbar button this is `show_idle_overlay`. With it, the idle
+/// page only shows its pill while the button is pointed at, so the pill is
+/// also told to stay open (`overlay://tray-open`) until another window comes
+/// to the front, the tray's "Hide" entry or its X closes it.
+pub fn open_overlay_from_tray(app: &AppHandle) {
+    let Ok(w) = create_overlay(app) else { return };
+    let app2 = app.clone();
+    on_main(app, move || {
+        let state = app2.state::<AppState>();
+        if state.voice.is_active() || state.dictation_busy.load(Ordering::Relaxed) {
+            return;
+        }
+        show_overlay_now(&app2, &w);
+        let _ = app2.emit_to(OVERLAY, "overlay://idle", ());
+        if taskbar_anchor(&app2).is_some() {
+            let _ = app2.emit_to(OVERLAY, "overlay://tray-open", true);
+            tray_pill::arm(&app2, &w);
+        }
+    });
+}
+
+/// Keeps the pill the tray opened above the taskbar button until another
+/// window comes to the front: an `EVENT_SYSTEM_FOREGROUND` WinEvent hook, set
+/// and removed on the main thread, whose message loop delivers its calls.
+#[cfg(windows)]
+mod tray_pill {
+    use super::OVERLAY;
+    use std::sync::atomic::{AtomicIsize, Ordering};
+    use std::sync::{Mutex, OnceLock};
+    use std::time::{Duration, Instant};
+    use tauri::{AppHandle, Emitter, WebviewWindow};
+    use windows::Win32::Foundation::HWND;
+    use windows::Win32::UI::Accessibility::{SetWinEventHook, UnhookWinEvent, HWINEVENTHOOK};
+    use windows::Win32::UI::WindowsAndMessaging::{
+        GetClassNameW, IsWindowVisible, EVENT_SYSTEM_FOREGROUND, WINEVENT_OUTOFCONTEXT,
+    };
+
+    /// Foreground changes this soon after the pill opened are the tray menu
+    /// closing, not the user going elsewhere.
+    const GRACE: Duration = Duration::from_millis(400);
+
+    static APP: OnceLock<AppHandle> = OnceLock::new();
+    static HOOK: AtomicIsize = AtomicIsize::new(0);
+    static OVERLAY_HWND: AtomicIsize = AtomicIsize::new(0);
+    static ARMED_AT: Mutex<Option<Instant>> = Mutex::new(None);
+
+    /// Main thread only.
+    pub fn arm(app: &AppHandle, w: &WebviewWindow) {
+        let _ = APP.set(app.clone());
+        OVERLAY_HWND.store(w.hwnd().map_or(0, |h| h.0 as isize), Ordering::SeqCst);
+        *ARMED_AT.lock().unwrap_or_else(|p| p.into_inner()) = Some(Instant::now());
+        if HOOK.load(Ordering::SeqCst) != 0 {
+            return;
+        }
+        // SAFETY: an out-of-context hook with a callback that lives for the
+        // whole program; removed again in `disarm` on this same thread.
+        let hook = unsafe {
+            SetWinEventHook(
+                EVENT_SYSTEM_FOREGROUND,
+                EVENT_SYSTEM_FOREGROUND,
+                None,
+                Some(on_foreground),
+                0,
+                0,
+                WINEVENT_OUTOFCONTEXT,
+            )
+        };
+        if hook.is_invalid() {
+            tracing::warn!(
+                "tray pill: could not watch the foreground; it closes with its X or the tray"
+            );
+            return;
+        }
+        HOOK.store(hook.0 as isize, Ordering::SeqCst);
+    }
+
+    /// Main thread only. Stops watching; with `tell`, the page lets the pill go.
+    pub fn disarm(app: &AppHandle, tell: bool) {
+        let hook = HOOK.swap(0, Ordering::SeqCst);
+        if hook == 0 {
+            return;
+        }
+        // SAFETY: the hook `arm` set on this thread.
+        unsafe {
+            let _ = UnhookWinEvent(HWINEVENTHOOK(hook as *mut _));
+        }
+        if tell {
+            let _ = app.emit_to(OVERLAY, "overlay://tray-open", false);
+        }
+    }
+
+    fn class_of(h: HWND) -> String {
+        let mut buf = [0u16; 128];
+        // SAFETY: a plain query into a buffer of the given size.
+        let n = unsafe { GetClassNameW(h, &mut buf) };
+        String::from_utf16_lossy(&buf[..n.max(0) as usize])
+    }
+
+    unsafe extern "system" fn on_foreground(
+        _hook: HWINEVENTHOOK,
+        _event: u32,
+        fg: HWND,
+        _id_object: i32,
+        _id_child: i32,
+        _thread: u32,
+        _time: u32,
+    ) {
+        let Some(app) = APP.get() else { return };
+        let fresh = ARMED_AT
+            .lock()
+            .unwrap_or_else(|p| p.into_inner())
+            .is_some_and(|t| t.elapsed() < GRACE);
+        if fresh || fg.0 as isize == OVERLAY_HWND.load(Ordering::SeqCst) {
+            return;
+        }
+        // The taskbar, the tray, a menu, or a hidden helper window (the tray
+        // icon's own) coming to the front is not the user going elsewhere.
+        // SAFETY: a plain query.
+        let visible = unsafe { IsWindowVisible(fg).as_bool() };
+        let class = class_of(fg);
+        if !visible
+            || class.starts_with("Shell_")
+            || class == "#32768"
+            || class == "NotifyIconOverflowWindow"
+            || class == "TopLevelWindowForOverflowXamlIsland"
+        {
+            return;
+        }
+        disarm(app, true);
+    }
+}
+
+#[cfg(not(windows))]
+mod tray_pill {
+    use tauri::{AppHandle, WebviewWindow};
+    pub fn arm(_app: &AppHandle, _w: &WebviewWindow) {}
+    pub fn disarm(_app: &AppHandle, _tell: bool) {}
+}
+
 /// Hides the overlay if nothing is being dictated: the taskbar button's hover
 /// pill, once the pointer has left it.
 pub fn hide_idle_overlay(app: &AppHandle) {
@@ -1199,6 +1339,8 @@ fn hide_overlay_window(app: &AppHandle, w: &WebviewWindow) {
                 return;
             }
             HIDE_PENDING.store(false, Ordering::SeqCst);
+            // A pill the tray kept open is gone with the window.
+            tray_pill::disarm(&app3, false);
             // The page resets itself to a bare idle card now, so the next show starts clean.
             let _ = app3.emit_to(OVERLAY, "overlay://hidden", ());
             let _ = w2.hide();

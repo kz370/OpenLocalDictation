@@ -5,7 +5,6 @@ use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent}
 use tauri::{AppHandle, Emitter, Manager};
 
 pub fn create(app: &AppHandle) -> tauri::Result<()> {
-    let title = MenuItem::with_id(app, "title", "Open Local Dictation", false, None::<&str>)?;
     let dictate = MenuItem::with_id(app, "dictate", "Show dictation window", true, None::<&str>)?;
     let close = MenuItem::with_id(app, "close", "Hide dictation window", true, None::<&str>)?;
     let settings = MenuItem::with_id(app, "settings", "Settings", true, None::<&str>)?;
@@ -13,7 +12,6 @@ pub fn create(app: &AppHandle) -> tauri::Result<()> {
     let menu = Menu::with_items(
         app,
         &[
-            &title,
             &dictate,
             &close,
             &PredefinedMenuItem::separator(app)?,
@@ -28,7 +26,7 @@ pub fn create(app: &AppHandle) -> tauri::Result<()> {
         .menu(&menu)
         .show_menu_on_left_click(false)
         .on_menu_event(|app, event| match event.id().as_ref() {
-            "dictate" => window::show_idle_overlay(app),
+            "dictate" => window::open_overlay_from_tray(app),
             "close" => {
                 // Same as the overlay's X: unpin, then it goes away (a running dictation is left alone).
                 let state = app.state::<AppState>();
@@ -50,7 +48,7 @@ pub fn create(app: &AppHandle) -> tauri::Result<()> {
                 ..
             } = event
             {
-                window::show_idle_overlay(tray.app_handle());
+                window::open_overlay_from_tray(tray.app_handle());
             }
         });
     if let Some(icon) = app.default_window_icon() {
