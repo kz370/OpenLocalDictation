@@ -122,3 +122,4 @@ Files Processed: 65 — COMPLETE
 - [2026-11-27T20:30:00Z] `SearchSelect` button is now as wide as its longest option too (invisible `.ss-size` copies of every label size it), not the width of the current value or a fixed column.
 - [2026-11-27T21:00:00Z] Model per language list: all drop-downs share one right-aligned column as wide as the longest option of any row (grid with subgrid rows).
 - [2026-11-27T21:30:00Z] Settings window: maximize / restore button on the title bar (`settings_toggle_maximize`, `settings_is_maximized`, event `settings://maximized`); the window is created maximizable.
+- [2026-11-27T22:00:00Z] Fix: a `SearchSelect` drop-down sometimes needed two clicks. Found with the WebView2 remote-debugging port: opening it made the enclosing card fire a `scroll` event (from `scrollIntoView`) right after the menu appeared, and the menu closed itself on any scroll. It now ignores scrolls that leave the button in place and scrolls only its own list.

@@ -61,6 +61,11 @@ export function SearchSelect(props: { value: string; options: SearchOption[]; on
     // A fixed menu does not follow its button: close when the page scrolls or resizes.
     const onMove = (e: Event) => {
       if (e.target instanceof Node && menuRef.current?.contains(e.target)) return;
+      // Only when the button really moved: a scroll that leaves it where it is
+      // (the card around it nudging itself as the menu opens) must not close
+      // the menu it just opened, which showed as a click that did nothing.
+      const now = root.current?.getBoundingClientRect();
+      if (now && Math.abs(now.left - r.left) < 1 && Math.abs(now.top - r.top) < 1) return;
       close();
     };
     window.addEventListener("scroll", onMove, true);
@@ -73,7 +78,12 @@ export function SearchSelect(props: { value: string; options: SearchOption[]; on
 
   useEffect(() => setActive(0), [query, open]);
   useEffect(() => {
-    list.current?.querySelector<HTMLElement>('[data-active="true"]')?.scrollIntoView({ block: "nearest" });
+    // Scrolls the list itself. scrollIntoView would also scroll the cards and pages around the (fixed) menu.
+    const box = list.current;
+    const row = box?.querySelector<HTMLElement>('[data-active="true"]');
+    if (!box || !row) return;
+    if (row.offsetTop < box.scrollTop) box.scrollTop = row.offsetTop;
+    else if (row.offsetTop + row.offsetHeight > box.scrollTop + box.clientHeight) box.scrollTop = row.offsetTop + row.offsetHeight - box.clientHeight;
   }, [active, open]);
 
   const onKey = (e: React.KeyboardEvent) => {

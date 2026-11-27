@@ -649,6 +649,7 @@ html[data-route="settings"] body {
 
 /* About six rows tall, then it scrolls. */
 .ss-list {
+  position: relative; /* the options' offsetParent (scroll-to-active) */
   display: flex;
   flex-direction: column;
   max-height: 168px;
