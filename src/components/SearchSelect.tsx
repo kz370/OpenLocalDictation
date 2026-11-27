@@ -115,12 +115,13 @@ export function SearchSelect(props: { value: string; options: SearchOption[]; on
       {open && (
         <div className="ss-menu" style={place} onKeyDown={onKey} tabIndex={-1} ref={(el) => {
             menuRef.current = el;
-            if (!searchable) el?.focus();
+            // preventScroll: focusing would otherwise scroll the card around the (fixed) menu.
+            if (!searchable) el?.focus({ preventScroll: true });
           }}>
           {searchable && (
           <div className="ss-search">
             <Search size={13} aria-hidden />
-            <input autoFocus value={query} placeholder={props.placeholder ?? "Search…"} aria-label={`${props.label}: search`} onChange={(e) => setQuery(e.target.value)} />
+            <input ref={(el) => { if (el && document.activeElement !== el) el.focus({ preventScroll: true }); }} value={query} placeholder={props.placeholder ?? "Search…"} aria-label={`${props.label}: search`} onChange={(e) => setQuery(e.target.value)} />
           </div>
           )}
           <div className="ss-list" role="listbox" aria-label={props.label} ref={list}>
