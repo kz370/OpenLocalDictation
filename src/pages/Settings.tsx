@@ -52,7 +52,7 @@ const INDEX: SearchEntry<Section>[] = [
   { section: "overlay", label: "Reset positions", keywords: "reset default overlay taskbar button" },
   { section: "app", label: "Start with Windows", keywords: "autostart startup boot login" },
   { section: "app", label: "Theme", keywords: "dark light system colour" },
-  { section: "app", label: "Accent colour", keywords: "color profile theme tray icon taskbar teal blue green amber slate" },
+  { section: "app", label: "Accent colour", keywords: "color profile theme tray icon taskbar green teal blue amber slate" },
   { section: "app", label: "Logs", keywords: "version open folder" },
 ];
 

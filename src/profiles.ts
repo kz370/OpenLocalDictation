@@ -116,7 +116,7 @@ export function tintedIcon(tint: Tint): Promise<string> {
 
 /** The app icon in the current color profile (the original until it is ready). */
 export function useAppIcon(): string {
-  const id = useSettings((s) => s.settings?.colorProfile ?? "teal");
+  const id = useSettings((s) => s.settings?.colorProfile ?? "green");
   const [src, setSrc] = useState(ICON);
   useEffect(() => {
     let off = false;

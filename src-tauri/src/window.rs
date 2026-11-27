@@ -85,6 +85,10 @@ pub fn ensure_settings(app: &AppHandle) -> tauri::Result<WebviewWindow> {
     .center()
     .visible(false)
     .build()?;
+    // The window's icon (Windows taskbar, Alt+Tab) is in the accent color.
+    if let Some(icon) = crate::tray::profile_icon(app) {
+        let _ = w.set_icon(icon);
+    }
     // Hide instead of destroying: rebuilding the window can render blank, and
     // a close mid-shortcut-recording must still re-register the hotkey.
     let h = app.clone();

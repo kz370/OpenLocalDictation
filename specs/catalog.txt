@@ -35,7 +35,7 @@ commands.rs        :: color_profiles, taskbar_set_languages, taskbar_widget_stat
 mic.rs             :: MicStatus, check - is there a usable microphone: the chosen (else default) capture endpoint is active and not muted (IMMDevice / IAudioEndpointVolume), and Windows' microphone privacy switches do not say Deny.
 lib.rs             :: start_mic_watch - 2 s thread; on a change drives taskbar::set_mic_ok, tray::set_mic_status and the mic://status event.
 shortcuts.rs       :: start_dictation refuses to start without a usable microphone (error mic_missing / mic_muted / mic_blocked shown in the overlay).
-tray.rs            :: set_mic_status, tint_red, set_profile, refresh_icon - red tray icon and tooltip while the microphone is not usable, otherwise the app icon in the color profile.
+tray.rs            :: set_mic_status, tint_red, set_profile, refresh_icon, profile_icon - red tray icon and tooltip while the microphone is not usable, otherwise the app icon in the color profile.
 profile.rs         :: Profile, ProfileInfo, TrayTint, PROFILES, DEFAULT, index, ids, infos, tint_icon - the five color profiles: one table for the taskbar button accents, the tray icon recoloring and (through color_profiles) the pages.
 src/profiles.ts    :: loadProfiles, useProfiles, useAppIcon, tintedIcon - injects the profiles' CSS variables and recolors the window's app icon.
 tray.rs            :: create, quit — tray menu (Show dictation window, Hide dictation window, Settings, Quit; no title entry); left click opens the idle dictation window.
@@ -84,7 +84,7 @@ components/VoiceBars.tsx       :: VoiceBars — mirrored 24-band spectrum.
 components/ErrorBoundary.tsx   :: ErrorBoundary — shows a crash instead of a blank window.
 components/Tooltip.tsx         :: TooltipLayer — themed tooltips replacing native title tooltips; in the overlay the text is shown inside its header instead of a bubble.
 styles/settings.css            :: settings window: sidebar, content column, cards, rows, models, languages, home (settings text one step larger than the overlay's).
-styles/tokens.css              :: design tokens, light/dark/high-contrast, teal accent.
+styles/tokens.css              :: design tokens, light/dark/high-contrast, green accent (default; the other profiles are derived from --p-* variables).
 styles/base.css                :: buttons, inputs, switch, segmented, badges, dialog, notices.
 styles/app.css                 :: settings shell, title bar, tabs, rows, cards, model list, overlay, dropdowns.
 

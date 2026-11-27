@@ -29,7 +29,7 @@ pub struct TrayTint {
     pub light: f32,
 }
 
-pub const DEFAULT: &str = "teal";
+pub const DEFAULT: &str = "green";
 
 const fn tint(hue: f32, sat: f32, light: f32) -> Option<TrayTint> {
     Some(TrayTint { hue, sat, light })
@@ -60,6 +60,11 @@ const fn profile(
 /// grey is `slate`. No red or pink: red is the microphone alert (tray icon and
 /// taskbar button) and the listening disc, and no accent may be mistaken for it.
 pub const PROFILES: [Profile; 5] = [
+    // The default. The app icon (and the installer's) is green already: it
+    // stays as it is.
+    profile(
+        "green", "Green", 0x15803d, 0xffffff, 0x4ade80, 0x052e14, None,
+    ),
     profile(
         "teal",
         "Teal",
@@ -77,10 +82,6 @@ pub const PROFILES: [Profile; 5] = [
         0x60a5fa,
         0x0b1b3a,
         tint(217.0, 0.95, 1.0),
-    ),
-    // The app icon is green already: it stays as it is.
-    profile(
-        "green", "Green", 0x15803d, 0xffffff, 0x4ade80, 0x052e14, None,
     ),
     profile(
         "amber",
@@ -211,7 +212,7 @@ mod tests {
     #[test]
     fn the_default_is_first_and_unknown_ids_fall_back_to_it() {
         assert_eq!(PROFILES[0].id, DEFAULT);
-        assert_eq!(index("blue"), 1);
+        assert_eq!(index("blue"), 2);
         assert_eq!(index("purple"), 0);
         assert_eq!(index(""), 0);
     }

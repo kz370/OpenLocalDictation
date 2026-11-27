@@ -16,7 +16,7 @@ use std::sync::{Arc, Mutex};
 /// What the button shows.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum WidgetState {
-    /// Teal mic.
+    /// Mic in the accent color.
     Idle,
     /// Red stop square with a pulsing ring.
     Listening,

@@ -1,4 +1,4 @@
-/* Design tokens. Neutral stone/graphite surfaces with a teal accent. */
+/* Design tokens. Neutral stone/graphite surfaces with a green accent. */
 
 :root {
   --font-scale: 1;
@@ -38,11 +38,11 @@
   --header-bg: rgba(250, 251, 250, 0.94);
   --composer-bg: #ffffff;
   --composer-shadow: 0 8px 28px rgba(15, 35, 30, 0.08), 0 1px 3px rgba(15, 35, 30, 0.06);
-  --focus-ring: rgba(13, 148, 136, 0.14);
-  --glow-1: rgba(45, 212, 191, 0.14);
+  --focus-ring: rgba(21, 128, 61, 0.14);
+  --glow-1: rgba(34, 197, 94, 0.14);
   --glow-2: rgba(14, 165, 233, 0.06);
-  --glow-strong: rgba(45, 212, 191, 0.3);
-  --user-bubble-shadow: rgba(13, 148, 136, 0.22);
+  --glow-strong: rgba(34, 197, 94, 0.3);
+  --user-bubble-shadow: rgba(21, 128, 61, 0.22);
   --code-inline: rgba(15, 23, 20, 0.06);
   --code-head: rgba(15, 23, 20, 0.04);
   --shadow-lg: 0 18px 48px rgba(15, 35, 30, 0.16), 0 2px 6px rgba(15, 35, 30, 0.08);
@@ -55,12 +55,12 @@
   --text: #1d1c1a;
   --text-muted: #67635d;
   --text-faint: #8f8a83;
-  --accent: #0f766e;
-  --accent-hover: #0b5f58;
+  --accent: #15803d;
+  --accent-hover: #116b32;
   --accent-contrast: #ffffff;
-  --accent-soft: #dcf1ec;
-  --accent-soft-text: #0b4f49;
-  --user-bubble: linear-gradient(145deg, #14b8a6, #0f766e);
+  --accent-soft: #dcf3e4;
+  --accent-soft-text: #0c4a21;
+  --user-bubble: linear-gradient(145deg, #22c55e, #15803d);
   --user-bubble-text: #ffffff;
   --assistant-bubble: #ffffff;
   --code-bg: #f6f8f7;
@@ -70,7 +70,7 @@
   --warning-soft: #fdf3e1;
   --success: #067647;
   --success-soft: #e3f5ec;
-  --focus: #0f766e;
+  --focus: #15803d;
   --shadow-sm: 0 1px 2px rgba(28, 25, 20, 0.06);
   --shadow-md: 0 6px 24px rgba(28, 25, 20, 0.12);
   --overlay: rgba(20, 18, 15, 0.35);
@@ -85,10 +85,10 @@
   --header-bg: rgba(14, 19, 18, 0.92);
   --composer-bg: #161c1b;
   --composer-shadow: 0 10px 30px rgba(0, 0, 0, 0.35), 0 1px 0 rgba(255, 255, 255, 0.03) inset;
-  --focus-ring: rgba(45, 212, 191, 0.12);
-  --glow-1: rgba(45, 212, 191, 0.09);
+  --focus-ring: rgba(74, 222, 128, 0.12);
+  --glow-1: rgba(74, 222, 128, 0.09);
   --glow-2: rgba(56, 189, 248, 0.04);
-  --glow-strong: rgba(45, 212, 191, 0.22);
+  --glow-strong: rgba(74, 222, 128, 0.22);
   --user-bubble-shadow: rgba(0, 0, 0, 0.25);
   --code-inline: rgba(255, 255, 255, 0.07);
   --code-head: rgba(255, 255, 255, 0.03);
@@ -102,13 +102,13 @@
   --text: #e3ebe8;
   --text-muted: #9aa8a3;
   --text-faint: #6d7a76;
-  --accent: #2dd4bf;
-  --accent-hover: #5eead4;
-  --accent-contrast: #04211e;
-  --accent-soft: #15332f;
-  --accent-soft-text: #99f6e4;
-  --user-bubble: linear-gradient(145deg, #0f766e, #115e59);
-  --user-bubble-text: #effdf9;
+  --accent: #4ade80;
+  --accent-hover: #86efac;
+  --accent-contrast: #052e14;
+  --accent-soft: #14301f;
+  --accent-soft-text: #bbf7d0;
+  --user-bubble: linear-gradient(145deg, #15803d, #166534);
+  --user-bubble-text: #f0fdf4;
   --assistant-bubble: #1f2322;
   --code-bg: #0b0f0e;
   --danger: #f97066;
@@ -117,19 +117,19 @@
   --warning-soft: #36291a;
   --success: #47cd89;
   --success-soft: #16301f;
-  --focus: #5eead4;
+  --focus: #86efac;
   --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4);
   --shadow-md: 0 8px 28px rgba(0, 0, 0, 0.5);
   --overlay: rgba(0, 0, 0, 0.55);
 }
 
-/* Color profiles (Settings > App > Color profile). Teal is the default above.
-   Every other profile only supplies --p-light / --p-ink-light / --p-dark /
+/* Color profiles (Settings > App > Accent colour). Green is the default above.
+   Every profile supplies --p-light / --p-ink-light / --p-dark /
    --p-ink-dark (injected from src-tauri/src/profile.rs by src/profiles.ts);
    the accent tokens are derived from them here. Red (no microphone) belongs to
    no profile, and high contrast keeps its own accent. */
 
-:root[data-profile]:not([data-profile="teal"]):not([data-contrast="high"])[data-theme="light"] {
+:root[data-profile]:not([data-contrast="high"])[data-theme="light"] {
   --accent: var(--p-light);
   --accent-hover: color-mix(in srgb, var(--p-light) 82%, black);
   --accent-contrast: var(--p-ink-light);
@@ -144,7 +144,7 @@
   --user-bubble-shadow: color-mix(in srgb, var(--p-light) 22%, transparent);
 }
 
-:root[data-profile]:not([data-profile="teal"]):not([data-contrast="high"])[data-theme="dark"] {
+:root[data-profile]:not([data-contrast="high"])[data-theme="dark"] {
   --accent: var(--p-dark);
   --accent-hover: color-mix(in srgb, var(--p-dark) 75%, white);
   --accent-contrast: var(--p-ink-dark);
@@ -170,11 +170,11 @@
   --text: #000000;
   --text-muted: #1f1f1f;
   --text-faint: #333333;
-  --accent: #00544d;
-  --accent-hover: #003b36;
+  --accent: #14532d;
+  --accent-hover: #0b3a1e;
   --accent-soft: #ffffff;
-  --accent-soft-text: #00302c;
-  --user-bubble: #00544d;
+  --accent-soft-text: #052e14;
+  --user-bubble: #14532d;
   --assistant-bubble: #ffffff;
   --focus: #000000;
 }
@@ -200,12 +200,12 @@
   --text: #ffffff;
   --text-muted: #f0f0f0;
   --text-faint: #d6d6d6;
-  --accent: #33ffe6;
-  --accent-hover: #99fff2;
+  --accent: #4dff88;
+  --accent-hover: #a6ffc6;
   --accent-contrast: #000000;
   --accent-soft: #000000;
-  --accent-soft-text: #33ffe6;
-  --user-bubble: #003d37;
+  --accent-soft-text: #4dff88;
+  --user-bubble: #00401a;
   --user-bubble-text: #ffffff;
   --assistant-bubble: #000000;
   --focus: #ffff00;

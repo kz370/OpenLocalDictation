@@ -131,7 +131,7 @@ Three ways to have it:
 - **Point at it** for a moment and the pill opens above it; move away and it closes.
 - **Drag** it along the taskbar. It stays exactly where you put it: tray icons appearing or other widgets
   resizing never move it. *Reset position* puts it back left of the notification area.
-- It shows the state: teal mic (ready), red stop square with a pulsing ring (listening), spinner (transcribing),
+- It shows the state: green mic (ready; the accent colour you picked), red stop square with a pulsing ring (listening), spinner (transcribing),
   pencil (review), green check (inserted), grey cross (nothing heard or cancelled), red slashed mic (no usable microphone).
 - Works with a taskbar at the bottom of the screen, centered or left-aligned icons, light or dark theme, any
   scaling, and survives an Explorer restart.
@@ -171,7 +171,7 @@ or by launching the app a second time.
 </tr>
 <tr>
 <td width="50%"><b>Overlay</b><br>Taskbar button, pin, size, style, opacity, position and locking.<br><img src="website/screenshots/settings-overlay.webp" alt="Overlay"></td>
-<td width="50%"><b>App</b><br>Start with Windows, theme (system, light, dark), logs.<br><img src="website/screenshots/settings-app.webp" alt="App"></td>
+<td width="50%"><b>App</b><br>Start with Windows, theme (system, light, dark), accent colour, logs.<br><img src="website/screenshots/settings-app.webp" alt="App"></td>
 </tr>
 <tr>
 <td width="50%"><b>Light theme</b><br>The whole app follows the system theme or your choice.<br><img src="website/screenshots/settings-overlay-light.webp" alt="Overlay page, light theme"></td>

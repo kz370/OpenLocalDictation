@@ -95,25 +95,47 @@ static MIC_OK: AtomicBool = AtomicBool::new(true);
 /// The color profile's index in `profile::PROFILES`.
 static PROFILE: AtomicUsize = AtomicUsize::new(0);
 
+/// The app icon in the color profile's color (never red): the icon of the
+/// app's windows, which is what the Windows taskbar and Alt+Tab show.
+pub fn profile_icon(app: &AppHandle) -> Option<tauri::image::Image<'static>> {
+    let normal = app.default_window_icon()?;
+    let rgba = match crate::profile::PROFILES[PROFILE.load(Ordering::Relaxed)].tray {
+        Some(tint) => crate::profile::tint_icon(normal.rgba(), tint),
+        None => normal.rgba().to_vec(),
+    };
+    Some(tauri::image::Image::new_owned(
+        rgba,
+        normal.width(),
+        normal.height(),
+    ))
+}
+
 /// Sets the tray icon: red while there is no usable microphone (whatever the
-/// color profile), otherwise the app icon in the profile's color.
+/// color profile), otherwise the app icon in the profile's color. The windows'
+/// icons follow the profile too (they stay the profile's color: red is the
+/// microphone alert of the tray icon and the taskbar button).
 fn refresh_icon(app: &AppHandle) {
+    for w in app.webview_windows().values() {
+        if let Some(icon) = profile_icon(app) {
+            let _ = w.set_icon(icon);
+        }
+    }
     let Some(tray) = app.tray_by_id("main") else {
         return;
     };
     let Some(normal) = app.default_window_icon() else {
         return;
     };
-    let rgba = if !MIC_OK.load(Ordering::Relaxed) {
-        tint_red(normal.rgba())
+    let icon = if MIC_OK.load(Ordering::Relaxed) {
+        profile_icon(app)
     } else {
-        match crate::profile::PROFILES[PROFILE.load(Ordering::Relaxed)].tray {
-            Some(tint) => crate::profile::tint_icon(normal.rgba(), tint),
-            None => normal.rgba().to_vec(),
-        }
+        Some(tauri::image::Image::new_owned(
+            tint_red(normal.rgba()),
+            normal.width(),
+            normal.height(),
+        ))
     };
-    let icon = tauri::image::Image::new_owned(rgba, normal.width(), normal.height());
-    let _ = tray.set_icon(Some(icon));
+    let _ = tray.set_icon(icon);
 }
 
 /// Sets the color profile (`profile::PROFILES` id) the tray icon is drawn in.

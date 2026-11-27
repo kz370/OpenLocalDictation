@@ -53,7 +53,7 @@ export const useSettings = create<SettingsState>((set, get) => ({
 
 /** The accent color profile: `data-profile` on the root (tokens.css). */
 export function applyProfile(profile: string | undefined) {
-  document.documentElement.dataset.profile = profile ?? "teal";
+  document.documentElement.dataset.profile = profile ?? "green";
 }
 
 let mediaListener: ((e: MediaQueryListEvent) => void) | null = null;
