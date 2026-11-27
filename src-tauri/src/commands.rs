@@ -800,6 +800,13 @@ pub fn taskbar_widget_status() -> taskbar::Status {
     taskbar::status()
 }
 
+/// The languages the taskbar button's right-click menu lists (code and label),
+/// sent by the overlay page whenever they change.
+#[tauri::command]
+pub fn taskbar_set_languages(items: Vec<taskbar::LangItem>) {
+    taskbar::set_languages(items);
+}
+
 /// Forgets where the taskbar button was put: it goes back to the default
 /// spot beside the notification area, which becomes its position again.
 #[tauri::command]

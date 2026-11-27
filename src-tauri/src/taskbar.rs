@@ -52,6 +52,8 @@ pub enum Event {
     /// The pointer rested on the button for the hover delay.
     HoverStart,
     HoverEnd,
+    /// Right click on the button: the language menu opens above it.
+    ContextMenu,
     /// The button has a position to remember: where a drag left it, or the
     /// default spot it was given the first time. Logical px from the taskbar's
     /// left edge.
@@ -68,8 +70,38 @@ pub struct Config {
     /// Saved position (logical px from the taskbar's left edge); `None` until
     /// it has been placed once.
     pub x: Option<i32>,
+    /// The dictation language setting (`auto` or a code), shown beside the mic.
+    pub language: String,
     pub on_event: Arc<EventFn>,
     pub on_status: Arc<StatusFn>,
+}
+
+/// One entry of the language menu.
+#[derive(Clone, Debug, serde::Deserialize)]
+pub struct LangItem {
+    pub code: String,
+    pub label: String,
+}
+
+static LANGS: Mutex<Vec<LangItem>> = Mutex::new(Vec::new());
+
+/// The languages the menu offers (the overlay page knows their names and which
+/// ones are shown, and sends them whenever they change).
+pub fn set_languages(items: Vec<LangItem>) {
+    *LANGS.lock().unwrap_or_else(|p| p.into_inner()) = items;
+}
+
+fn languages() -> Vec<LangItem> {
+    LANGS.lock().unwrap_or_else(|p| p.into_inner()).clone()
+}
+
+/// What the language indicator says: `AUTO`, or the code in capitals.
+pub fn language_label(code: &str) -> String {
+    let code = code.trim();
+    if code.is_empty() || code.eq_ignore_ascii_case("auto") {
+        return "AUTO".into();
+    }
+    code.chars().take(4).flat_map(char::to_uppercase).collect()
 }
 
 /// Whether the button is on the taskbar, and if not, why.
@@ -104,6 +136,20 @@ static SHARED: Mutex<Shared> = Mutex::new(Shared {
     anchor: None,
 });
 
+#[cfg(test)]
+mod label_tests {
+    use super::language_label;
+
+    #[test]
+    fn the_indicator_says_auto_or_the_code_in_capitals() {
+        assert_eq!(language_label("auto"), "AUTO");
+        assert_eq!(language_label(""), "AUTO");
+        assert_eq!(language_label("en"), "EN");
+        assert_eq!(language_label("ar"), "AR");
+        assert_eq!(language_label("zh-cn-long"), "ZH-C");
+    }
+}
+
 pub fn status() -> Status {
     SHARED
         .lock()
@@ -118,7 +164,7 @@ pub fn anchor() -> Option<Anchor> {
 }
 
 #[cfg(windows)]
-pub use imp::{set_mic_ok, set_state, set_x, start, stop};
+pub use imp::{pick_language, set_language, set_mic_ok, set_state, set_x, start, stop};
 
 #[cfg(not(windows))]
 pub fn start(_config: Config) {}
@@ -130,6 +176,12 @@ pub fn set_state(_state: WidgetState) {}
 pub fn set_x(_x: Option<i32>) {}
 #[cfg(not(windows))]
 pub fn set_mic_ok(_ok: bool) {}
+#[cfg(not(windows))]
+pub fn set_language(_code: &str) {}
+#[cfg(not(windows))]
+pub fn pick_language(_current: &str) -> Option<String> {
+    None
+}
 
 /// Drawing: pure software rendering into premultiplied BGRA, so the button has
 /// per-pixel alpha (soft edges, halo) without a graphics library.
@@ -147,33 +199,46 @@ mod draw {
         )
     }
 
-    /// Logical size of the button's window and of its disc.
+    /// Logical height of the button's window, and the side of the square its
+    /// disc sits in.
     pub const BOX: f32 = 32.0;
+    /// Logical width of the language indicator to the right of the disc.
+    pub const CHIP_W: f32 = 50.0;
     const R: f32 = 11.5;
+    /// Half the height of the capsule that holds the disc and the indicator.
+    const CAPSULE_HALF_H: f32 = 14.5;
 
     /// Premultiplied pixel.
     type Px = [f32; 4];
 
+    /// Coverage (0..1) of rendered text, one value per physical pixel.
+    pub struct Mask {
+        pub w: usize,
+        pub h: usize,
+        pub cov: Vec<f32>,
+    }
+
     struct Canvas {
-        n: usize,
+        w: usize,
+        h: usize,
         scale: f32,
         px: Vec<Px>,
     }
 
     impl Canvas {
         /// Composites `color` at `alpha` where `sd(x, y)` (signed distance in
-        /// logical px from the box's center, negative inside) says so.
+        /// logical px from the disc's center, negative inside) says so.
         fn paint(&mut self, color: Rgb, alpha: f32, sd: impl Fn(f32, f32) -> f32) {
-            let half = self.n as f32 / 2.0;
-            for y in 0..self.n {
-                for x in 0..self.n {
+            let half = self.h as f32 / 2.0;
+            for y in 0..self.h {
+                for x in 0..self.w {
                     let lx = (x as f32 + 0.5 - half) / self.scale;
                     let ly = (y as f32 + 0.5 - half) / self.scale;
                     let cov = (0.5 - sd(lx, ly) * self.scale).clamp(0.0, 1.0) * alpha;
                     if cov <= 0.0 {
                         continue;
                     }
-                    let d = &mut self.px[y * self.n + x];
+                    let d = &mut self.px[y * self.w + x];
                     let keep = 1.0 - cov;
                     d[0] = color.0 * cov + d[0] * keep;
                     d[1] = color.1 * cov + d[1] * keep;
@@ -185,6 +250,26 @@ mod draw {
     }
 
     impl Canvas {
+        /// Composites text coverage at physical column `x0`.
+        fn blit_mask(&mut self, x0: usize, mask: &Mask, color: Rgb) {
+            for y in 0..mask.h.min(self.h) {
+                for x in 0..mask.w {
+                    let Some(&cov) = mask.cov.get(y * mask.w + x) else {
+                        continue;
+                    };
+                    if cov <= 0.0 || x0 + x >= self.w {
+                        continue;
+                    }
+                    let d = &mut self.px[y * self.w + x0 + x];
+                    let keep = 1.0 - cov;
+                    d[0] = color.0 * cov + d[0] * keep;
+                    d[1] = color.1 * cov + d[1] * keep;
+                    d[2] = color.2 * cov + d[2] * keep;
+                    d[3] = cov + d[3] * keep;
+                }
+            }
+        }
+
         /// Like `paint`, with a color that runs from `top` (at -span) to
         /// `bottom` (at +span) down the box.
         fn paint_vertical(
@@ -194,9 +279,9 @@ mod draw {
             span: f32,
             sd: impl Fn(f32, f32) -> f32,
         ) {
-            let half = self.n as f32 / 2.0;
-            for y in 0..self.n {
-                for x in 0..self.n {
+            let half = self.h as f32 / 2.0;
+            for y in 0..self.h {
+                for x in 0..self.w {
                     let lx = (x as f32 + 0.5 - half) / self.scale;
                     let ly = (y as f32 + 0.5 - half) / self.scale;
                     let cov = (0.5 - sd(lx, ly) * self.scale).clamp(0.0, 1.0);
@@ -205,7 +290,7 @@ mod draw {
                     }
                     let k = ((ly + span) / (2.0 * span)).clamp(0.0, 1.0);
                     let mix = |a: f32, b: f32| a + (b - a) * k;
-                    let d = &mut self.px[y * self.n + x];
+                    let d = &mut self.px[y * self.w + x];
                     let keep = 1.0 - cov;
                     d[0] = mix(top.0, bottom.0) * cov + d[0] * keep;
                     d[1] = mix(top.1, bottom.1) * cov + d[1] * keep;
@@ -287,26 +372,61 @@ mod draw {
         )
     }
 
-    /// Side of the window in physical px.
-    pub fn size_px(scale: f32) -> usize {
+    /// Height of the window in physical px.
+    pub fn height_px(scale: f32) -> usize {
         (BOX * scale).round().max(8.0) as usize
     }
 
-    /// Renders one frame. `t_ms` drives the animations.
-    pub fn render(
-        state: WidgetState,
-        hover: bool,
-        pressed: bool,
-        light_taskbar: bool,
-        mic_ok: bool,
-        scale: f32,
-        t_ms: u64,
-    ) -> (usize, Vec<u32>) {
-        let n = size_px(scale);
-        let mut c = Canvas {
-            n,
+    /// Width of the window in physical px.
+    pub fn width_px(scale: f32) -> usize {
+        ((BOX + CHIP_W) * scale).round().max(8.0) as usize
+    }
+
+    /// Physical px from the window's left edge to where the indicator starts
+    /// (just right of the disc).
+    pub fn chip_left_px(scale: f32) -> usize {
+        ((BOX - 3.0) * scale).round() as usize
+    }
+
+    /// One frame's inputs.
+    pub struct Frame<'a> {
+        pub state: WidgetState,
+        pub hover: bool,
+        pub pressed: bool,
+        pub light_taskbar: bool,
+        pub mic_ok: bool,
+        pub scale: f32,
+        /// Drives the animations.
+        pub t_ms: u64,
+        /// The language indicator's text, as coverage over the chip area.
+        pub label: Option<&'a Mask>,
+    }
+
+    /// Signed distance to a rounded box centered at `(cx, 0)`.
+    fn capsule(x: f32, y: f32, cx: f32, half_w: f32, half_h: f32) -> f32 {
+        let r = half_h;
+        let (qx, qy) = ((x - cx).abs() - (half_w - r), y.abs() - (half_h - r));
+        qx.max(0.0).hypot(qy.max(0.0)) + qx.max(qy).min(0.0) - r
+    }
+
+    /// Renders one frame: (width, height, premultiplied BGRA pixels).
+    pub fn render(f: &Frame) -> (usize, usize, Vec<u32>) {
+        let Frame {
+            state,
+            hover,
+            pressed,
+            light_taskbar,
+            mic_ok,
             scale,
-            px: vec![[0.0; 4]; n * n],
+            t_ms,
+            label,
+        } = *f;
+        let (w, h) = (width_px(scale), height_px(scale));
+        let mut c = Canvas {
+            w,
+            h,
+            scale,
+            px: vec![[0.0; 4]; w * h],
         };
         let p = palette(light_taskbar);
         // No usable microphone: the idle button is red, with a slashed mic.
@@ -325,11 +445,29 @@ mod draw {
         };
         let t = t_ms as f32;
 
-        // A clean flat disc: no halo at rest (it read as a smudge on the
-        // taskbar), a thin ring when pointed at, a pulse while listening.
-        if hover {
-            c.paint(base, 0.45, |x, y| ring(x, y, R + 1.6, 1.4));
-        }
+        // A capsule holds the disc and the language indicator; it brightens
+        // when pointed at. Inside it, a flat disc: no halo at rest (it read
+        // as a smudge on the taskbar), a pulse while listening.
+        let tint = if light_taskbar {
+            Rgb(0.0, 0.0, 0.0)
+        } else {
+            Rgb(1.0, 1.0, 1.0)
+        };
+        // Capsule edges in disc-center coordinates: 3 px clear of the disc on
+        // the left, half a px inside the window on the right.
+        let (left, right) = (-(R + 3.0), BOX + CHIP_W - BOX / 2.0 - 0.5);
+        let (cx, half_w) = ((left + right) / 2.0, (right - left) / 2.0);
+        let lit = hover || pressed;
+        let fill = match (light_taskbar, lit) {
+            (true, false) => 0.07,
+            (true, true) => 0.13,
+            (false, false) => 0.10,
+            (false, true) => 0.17,
+        };
+        c.paint(tint, fill, |x, y| capsule(x, y, cx, half_w, CAPSULE_HALF_H));
+        c.paint(tint, 0.14, |x, y| {
+            capsule(x, y, cx, half_w, CAPSULE_HALF_H).abs() - 0.5
+        });
         if state == WidgetState::Listening {
             let phase = (t % 1400.0) / 1400.0;
             c.paint(base, (1.0 - phase) * 0.7, |x, y| {
@@ -395,6 +533,15 @@ mod draw {
             }
         }
 
+        if let Some(mask) = label {
+            let ink = if light_taskbar {
+                hex(0x1f2937)
+            } else {
+                hex(0xe5e7eb)
+            };
+            c.blit_mask(chip_left_px(scale), mask, ink);
+        }
+
         let out =
             c.px.iter()
                 .map(|p| {
@@ -402,7 +549,7 @@ mod draw {
                     (q(p[3]) << 24) | (q(p[0]) << 16) | (q(p[1]) << 8) | q(p[2])
                 })
                 .collect();
-        (n, out)
+        (w, h, out)
     }
 
     fn mic(c: &mut Canvas, ink: Rgb) {
@@ -433,16 +580,53 @@ mod draw {
                 WidgetState::Fail,
             ] {
                 for scale in [1.0, 1.5, 2.0] {
-                    let (n, px) = render(state, false, false, true, true, scale, 300);
-                    let (_, alert) =
-                        render(WidgetState::Idle, false, false, true, false, scale, 300);
+                    let frame = |state, mic_ok| Frame {
+                        state,
+                        hover: false,
+                        pressed: false,
+                        light_taskbar: true,
+                        mic_ok,
+                        scale,
+                        t_ms: 300,
+                        label: None,
+                    };
+                    let (w, h, px) = render(&frame(state, true));
+                    let (_, _, alert) = render(&frame(WidgetState::Idle, false));
                     assert_ne!(alert, px);
-                    assert_eq!(px.len(), n * n);
+                    assert_eq!(px.len(), w * h);
+                    assert!(w > h);
                     // The disc is opaque in the middle and the corners stay clear.
-                    assert!(px[n * (n / 2) + n / 2] >> 24 == 0xff);
+                    assert!(px[w * (h / 2) + h / 2] >> 24 == 0xff);
                     assert_eq!(px[0] >> 24, 0);
                 }
             }
+        }
+
+        #[test]
+        fn the_language_label_is_drawn_inside_the_capsule() {
+            let scale = 1.0;
+            let (w, h) = (width_px(scale), height_px(scale));
+            let mask = Mask {
+                w: w - chip_left_px(scale),
+                h,
+                cov: vec![1.0; (w - chip_left_px(scale)) * h],
+            };
+            let frame = |label| Frame {
+                state: WidgetState::Idle,
+                hover: false,
+                pressed: false,
+                light_taskbar: false,
+                mic_ok: true,
+                scale,
+                t_ms: 0,
+                label,
+            };
+            let (_, _, plain) = render(&frame(None));
+            let (_, _, labelled) = render(&frame(Some(&mask)));
+            assert_ne!(plain, labelled);
+            // Opaque ink in the middle of the indicator, nothing past the window.
+            assert_eq!(labelled[w * (h / 2) + w - 10] >> 24, 0xff);
+            assert_eq!(labelled.len(), w * h);
         }
     }
 }
@@ -450,7 +634,7 @@ mod draw {
 #[cfg(windows)]
 mod imp {
     use super::{draw, Anchor, Config, Event, Status, WidgetState, SHARED};
-    use std::cell::Cell;
+    use std::cell::{Cell, RefCell};
     use std::ffi::c_void;
     use std::sync::atomic::{AtomicBool, AtomicI32, AtomicIsize, AtomicU8, Ordering};
     use std::sync::Mutex;
@@ -460,8 +644,11 @@ mod imp {
         COLORREF, HINSTANCE, HWND, LPARAM, LRESULT, POINT, RECT, SIZE, WPARAM,
     };
     use windows::Win32::Graphics::Gdi::{
-        CreateCompatibleDC, CreateDIBSection, DeleteDC, DeleteObject, GetDC, ReleaseDC,
-        SelectObject, BITMAPINFO, BITMAPINFOHEADER, BLENDFUNCTION, DIB_RGB_COLORS, HGDIOBJ,
+        CreateCompatibleDC, CreateDIBSection, CreateFontW, DeleteDC, DeleteObject, DrawTextW,
+        GdiFlush, GetDC, ReleaseDC, SelectObject, SetBkMode, SetTextColor, ANTIALIASED_QUALITY,
+        BITMAPINFO, BITMAPINFOHEADER, BLENDFUNCTION, CLIP_DEFAULT_PRECIS, DEFAULT_CHARSET,
+        DIB_RGB_COLORS, DT_CENTER, DT_NOCLIP, DT_NOPREFIX, DT_SINGLELINE, DT_VCENTER, HGDIOBJ,
+        OUT_DEFAULT_PRECIS, TRANSPARENT,
     };
     use windows::Win32::System::LibraryLoader::GetModuleHandleW;
     use windows::Win32::System::Registry::{RegGetValueW, HKEY_CURRENT_USER, RRF_RT_REG_DWORD};
@@ -477,6 +664,7 @@ mod imp {
     const WM_SET_X: u32 = WM_APP + 2;
     const WM_STOP: u32 = WM_APP + 3;
     const WM_MIC: u32 = WM_APP + 4;
+    const WM_LANG: u32 = WM_APP + 5;
     const WM_MOUSELEAVE: u32 = 0x02A3;
     /// `wParam` flag of a mouse message: Ctrl was down.
     const MK_CONTROL: usize = 0x0008;
@@ -508,6 +696,7 @@ mod imp {
 
     static CTL: AtomicIsize = AtomicIsize::new(0);
     static MIC_OK: AtomicBool = AtomicBool::new(true);
+    static MENU_OPEN: AtomicBool = AtomicBool::new(false);
     static RUNNING: AtomicBool = AtomicBool::new(false);
     static WANTED: AtomicBool = AtomicBool::new(false);
     static STATE: AtomicU8 = AtomicU8::new(0);
@@ -515,6 +704,8 @@ mod imp {
     /// it has one. Fixed once set: nothing else on the taskbar moves it.
     static X: AtomicI32 = AtomicI32::new(-1);
     static CONFIG: Mutex<Option<Config>> = Mutex::new(None);
+    /// The language indicator's text (`AUTO`, `EN`, ...).
+    static LABEL: Mutex<String> = Mutex::new(String::new());
     /// The foreground window just before the last click on the button.
     static PREV_FG: AtomicIsize = AtomicIsize::new(0);
 
@@ -587,6 +778,8 @@ mod imp {
         hover: Cell<bool>,
         tracking: Cell<bool>,
         hover_fired: Cell<bool>,
+        /// The pointer is over the language indicator, not the mic disc.
+        on_chip: Cell<bool>,
         pressed: Cell<bool>,
         drag_armed: Cell<bool>,
         dragging: Cell<bool>,
@@ -599,13 +792,16 @@ mod imp {
         warned: Cell<bool>,
         created_msg: Cell<u32>,
         placed: Cell<Option<Placed>>,
+        /// The indicator's rendered text: (label, coverage).
+        label: RefCell<Option<(String, draw::Mask)>>,
     }
 
     #[derive(Clone, Copy, PartialEq)]
     struct Placed {
         x: i32,
         y: i32,
-        size: i32,
+        w: i32,
+        h: i32,
     }
 
     thread_local! {
@@ -615,6 +811,7 @@ mod imp {
             hover: Cell::new(false),
             tracking: Cell::new(false),
             hover_fired: Cell::new(false),
+            on_chip: Cell::new(false),
             pressed: Cell::new(false),
             drag_armed: Cell::new(false),
             dragging: Cell::new(false),
@@ -627,6 +824,7 @@ mod imp {
             warned: Cell::new(false),
             created_msg: Cell::new(0),
             placed: Cell::new(None),
+            label: RefCell::new(None),
         } };
     }
 
@@ -661,6 +859,7 @@ mod imp {
 
     pub fn start(config: Config) {
         X.store(config.x.unwrap_or(-1), Ordering::Relaxed);
+        *LABEL.lock().unwrap_or_else(|p| p.into_inner()) = super::language_label(&config.language);
         *CONFIG.lock().unwrap_or_else(|p| p.into_inner()) = Some(config);
         WANTED.store(true, Ordering::SeqCst);
         if RUNNING.swap(true, Ordering::SeqCst) {
@@ -723,6 +922,140 @@ mod imp {
             unsafe {
                 let _ = PostMessageW(Some(hwnd(ctl)), WM_MIC, WPARAM(0), LPARAM(0));
             }
+        }
+    }
+
+    /// Sets the dictation language shown beside the mic (`auto` or a code).
+    pub fn set_language(code: &str) {
+        let label = super::language_label(code);
+        {
+            let mut g = LABEL.lock().unwrap_or_else(|p| p.into_inner());
+            if *g == label {
+                return;
+            }
+            *g = label;
+        }
+        let ctl = CTL.load(Ordering::SeqCst);
+        if ctl != 0 {
+            // SAFETY: as in `stop`.
+            unsafe {
+                let _ = PostMessageW(Some(hwnd(ctl)), WM_LANG, WPARAM(0), LPARAM(0));
+            }
+        }
+    }
+
+    /// Shows the language menu just above the taskbar at the pointer (the
+    /// button's indicator was right-clicked) and returns the code chosen, if
+    /// any. Blocks until the menu closes, so it runs on a thread of its own,
+    /// never the widget's: the menu is owned by a hidden window made here.
+    pub fn pick_language(current: &str) -> Option<String> {
+        // One menu at a time: a second right click while it is open does nothing.
+        if MENU_OPEN.swap(true, Ordering::SeqCst) {
+            return None;
+        }
+        let picked = pick_language_inner(current);
+        MENU_OPEN.store(false, Ordering::SeqCst);
+        picked
+    }
+
+    unsafe extern "system" fn owner_proc(h: HWND, msg: u32, wp: WPARAM, lp: LPARAM) -> LRESULT {
+        // SAFETY: the stock window procedure, called with the arguments it was given.
+        unsafe { DefWindowProcW(h, msg, wp, lp) }
+    }
+
+    fn pick_language_inner(current: &str) -> Option<String> {
+        let items = super::languages();
+        let Some(anchor) = SHARED.lock().unwrap_or_else(|p| p.into_inner()).anchor else {
+            tracing::warn!("language menu: the taskbar button has no position");
+            return None;
+        };
+        if items.is_empty() {
+            tracing::warn!("language menu: the language list has not arrived yet");
+            return None;
+        }
+        let current = if current.is_empty() { "auto" } else { current };
+        let at = cursor();
+        let y = anchor.top - (GAP * anchor.scale as f32).round() as i32;
+        // SAFETY: a menu and a window made, used and destroyed on this thread.
+        unsafe {
+            let menu = CreatePopupMenu().ok()?;
+            for (i, it) in items.iter().enumerate() {
+                let text: Vec<u16> = it.label.encode_utf16().chain(Some(0)).collect();
+                let flags = if it.code == current {
+                    MF_STRING | MF_CHECKED
+                } else {
+                    MF_STRING
+                };
+                let _ = AppendMenuW(menu, flags, i + 1, PCWSTR(text.as_ptr()));
+            }
+            // A window class of our own (the stock "STATIC" one gave a window
+            // the menu would not take as its owner).
+            let class = w!("OpenLocalDictationMenuOwner");
+            let hinst = GetModuleHandleW(None).ok().map(|m| HINSTANCE(m.0));
+            let _ = RegisterClassW(&WNDCLASSW {
+                lpfnWndProc: Some(owner_proc),
+                hInstance: hinst.unwrap_or_default(),
+                lpszClassName: class,
+                ..Default::default()
+            });
+            let owner = match CreateWindowExW(
+                WS_EX_TOOLWINDOW,
+                class,
+                w!(""),
+                WS_POPUP,
+                0,
+                0,
+                0,
+                0,
+                None,
+                None,
+                hinst,
+                None,
+            ) {
+                Ok(o) => Some(o),
+                Err(e) => {
+                    tracing::warn!(error = %e, "language menu: no owner window");
+                    None
+                }
+            };
+            // The owner must be in front, or a click elsewhere would not close
+            // the menu (and a menu whose owner loses the front closes at once).
+            if let Some(o) = owner {
+                for _ in 0..5 {
+                    let _ = SetForegroundWindow(o);
+                    if GetForegroundWindow() == o {
+                        break;
+                    }
+                    std::thread::sleep(Duration::from_millis(15));
+                }
+                if GetForegroundWindow() != o {
+                    tracing::warn!("language menu: could not take the foreground");
+                }
+            }
+            let opened = Instant::now();
+            let cmd = TrackPopupMenu(
+                menu,
+                TPM_BOTTOMALIGN | TPM_CENTERALIGN | TPM_RETURNCMD | TPM_NONOTIFY,
+                at.x,
+                y,
+                None,
+                owner.unwrap_or_default(),
+                None,
+            );
+            let n = cmd.0;
+            if n <= 0 && opened.elapsed() < Duration::from_millis(250) {
+                tracing::warn!(
+                    error = %windows::core::Error::from_thread(),
+                    "language menu: closed at once without a choice"
+                );
+            }
+            let _ = DestroyMenu(menu);
+            if let Some(o) = owner {
+                let _ = DestroyWindow(o);
+            }
+            // The app being dictated into gets the focus back.
+            restore_foreground();
+            (n > 0).then(|| items.get(n as usize - 1).map(|it| it.code.clone()))?
         }
     }
 
@@ -913,7 +1246,8 @@ mod imp {
         /// Client position inside the taskbar.
         x: i32,
         y: i32,
-        size: i32,
+        w: i32,
+        h: i32,
         scale: f32,
         /// Logical px from the taskbar's left edge.
         x_logical: i32,
@@ -942,7 +1276,7 @@ mod imp {
         // SAFETY: plain DPI query.
         let dpi = unsafe { GetDpiForWindow(taskbar) };
         let scale = if dpi == 0 { 1.0 } else { dpi as f32 / 96.0 };
-        let size = draw::size_px(scale) as i32;
+        let (size, height) = (draw::width_px(scale) as i32, draw::height_px(scale) as i32);
         let gap = (GAP * scale).round() as i32;
 
         // SAFETY: plain lookup.
@@ -993,17 +1327,18 @@ mod imp {
             right - size
         }
         .clamp(bar.left, (bar.right - size).max(bar.left));
-        let top = bar.top + (bh - size) / 2;
+        let top = bar.top + (bh - height) / 2;
         Ok(Geom {
             x: left - bar.left,
             y: top - bar.top,
-            size,
+            w: size,
+            h: height,
             scale,
             x_logical: ((left - bar.left) as f32 / scale).round() as i32,
             is_default: fixed < 0,
             anchor: Anchor {
                 center_x: left + size / 2,
-                center_y: top + size / 2,
+                center_y: top + height / 2,
                 top: bar.top,
                 scale: scale as f64,
             },
@@ -1039,8 +1374,8 @@ mod imp {
                 WS_CHILD | WS_CLIPSIBLINGS,
                 geom.x,
                 geom.y,
-                geom.size,
-                geom.size,
+                geom.w,
+                geom.h,
                 Some(taskbar),
                 None,
                 Some(HINSTANCE(module.0)),
@@ -1106,7 +1441,8 @@ mod imp {
         let placed = Placed {
             x: geom.x,
             y: geom.y,
-            size: geom.size,
+            w: geom.w,
+            h: geom.h,
         };
         let moved = L.with(|l| l.placed.replace(Some(placed)) != Some(placed));
         L.with(|l| l.scale.set(geom.scale));
@@ -1123,8 +1459,8 @@ mod imp {
                     None,
                     geom.x,
                     geom.y,
-                    geom.size,
-                    geom.size,
+                    geom.w,
+                    geom.h,
                     SWP_NOZORDER | SWP_NOACTIVATE,
                 );
             }
@@ -1196,6 +1532,92 @@ mod imp {
         }
     }
 
+    /// Logical px height of the indicator's letters.
+    const LABEL_PX: f32 = 12.0;
+
+    /// Renders `text` white-on-black with GDI (grayscale smoothing) over the
+    /// indicator's area and keeps the brightness as coverage: the software
+    /// renderer has no fonts of its own.
+    fn text_mask(text: &str, scale: f32) -> draw::Mask {
+        let h = draw::height_px(scale);
+        let w = draw::width_px(scale).saturating_sub(draw::chip_left_px(scale));
+        let mut cov = vec![0.0f32; w * h];
+        if text.is_empty() || w == 0 {
+            return draw::Mask { w, h, cov };
+        }
+        let info = BITMAPINFO {
+            bmiHeader: BITMAPINFOHEADER {
+                biSize: std::mem::size_of::<BITMAPINFOHEADER>() as u32,
+                biWidth: w as i32,
+                biHeight: -(h as i32),
+                biPlanes: 1,
+                biBitCount: 32,
+                biCompression: 0,
+                ..Default::default()
+            },
+            ..Default::default()
+        };
+        // SAFETY: GDI objects created here are released before returning; the
+        // DIB's memory holds w*h pixels, is zeroed before use and is only read
+        // within that.
+        unsafe {
+            let screen = GetDC(None);
+            let mem = CreateCompatibleDC(Some(screen));
+            let mut bits: *mut c_void = std::ptr::null_mut();
+            if let Ok(bmp) = CreateDIBSection(Some(mem), &info, DIB_RGB_COLORS, &mut bits, None, 0)
+            {
+                if !bits.is_null() {
+                    std::ptr::write_bytes(bits as *mut u32, 0, w * h);
+                    let old = SelectObject(mem, HGDIOBJ(bmp.0));
+                    let font = CreateFontW(
+                        -((LABEL_PX * scale).round() as i32),
+                        0,
+                        0,
+                        0,
+                        600,
+                        0,
+                        0,
+                        0,
+                        DEFAULT_CHARSET,
+                        OUT_DEFAULT_PRECIS,
+                        CLIP_DEFAULT_PRECIS,
+                        ANTIALIASED_QUALITY,
+                        0,
+                        w!("Segoe UI"),
+                    );
+                    let old_font = SelectObject(mem, HGDIOBJ(font.0));
+                    SetBkMode(mem, TRANSPARENT);
+                    SetTextColor(mem, COLORREF(0x00ff_ffff));
+                    let mut wide: Vec<u16> = text.encode_utf16().collect();
+                    let mut rect = RECT {
+                        left: 0,
+                        top: 0,
+                        right: w as i32,
+                        bottom: h as i32,
+                    };
+                    DrawTextW(
+                        mem,
+                        &mut wide,
+                        &mut rect,
+                        DT_CENTER | DT_VCENTER | DT_SINGLELINE | DT_NOPREFIX | DT_NOCLIP,
+                    );
+                    let _ = GdiFlush();
+                    let px = std::slice::from_raw_parts(bits as *const u32, w * h);
+                    for (c, p) in cov.iter_mut().zip(px) {
+                        *c = ((p >> 8) & 0xff) as f32 / 255.0;
+                    }
+                    SelectObject(mem, old_font);
+                    let _ = DeleteObject(HGDIOBJ(font.0));
+                    SelectObject(mem, old);
+                }
+                let _ = DeleteObject(HGDIOBJ(bmp.0));
+            }
+            let _ = DeleteDC(mem);
+            ReleaseDC(None, screen);
+        }
+        draw::Mask { w, h, cov }
+    }
+
     /// Draws the current frame into the layered window.
     fn redraw(widget: HWND) {
         let (state, hover, pressed, light, scale, t) = L.with(|l| {
@@ -1211,12 +1633,34 @@ mod imp {
             )
         });
         let mic_ok = MIC_OK.load(Ordering::Relaxed);
-        let (n, pixels) = draw::render(state, hover, pressed, light, mic_ok, scale, t);
+        let text = LABEL.lock().unwrap_or_else(|p| p.into_inner()).clone();
+        let (w, h) = (draw::width_px(scale), draw::height_px(scale));
+        let chip_w = w.saturating_sub(draw::chip_left_px(scale));
+        L.with(|l| {
+            let mut cache = l.label.borrow_mut();
+            let fresh = matches!(&*cache, Some((s, m)) if *s == text && m.w == chip_w && m.h == h);
+            if !fresh {
+                *cache = Some((text.clone(), text_mask(&text, scale)));
+            }
+        });
+        let (n, nh, pixels) = L.with(|l| {
+            let cache = l.label.borrow();
+            draw::render(&draw::Frame {
+                state,
+                hover,
+                pressed,
+                light_taskbar: light,
+                mic_ok,
+                scale,
+                t_ms: t,
+                label: cache.as_ref().map(|(_, m)| m),
+            })
+        });
         let info = BITMAPINFO {
             bmiHeader: BITMAPINFOHEADER {
                 biSize: std::mem::size_of::<BITMAPINFOHEADER>() as u32,
                 biWidth: n as i32,
-                biHeight: -(n as i32),
+                biHeight: -(nh as i32),
                 biPlanes: 1,
                 biBitCount: 32,
                 biCompression: 0,
@@ -1225,7 +1669,7 @@ mod imp {
             ..Default::default()
         };
         // SAFETY: GDI objects created here are released before returning; the
-        // DIB's memory holds n*n pixels and is only written within that.
+        // DIB's memory holds n*nh pixels and is only written within that.
         unsafe {
             let screen = GetDC(None);
             let mem = CreateCompatibleDC(Some(screen));
@@ -1233,11 +1677,11 @@ mod imp {
             if let Ok(bmp) = CreateDIBSection(Some(mem), &info, DIB_RGB_COLORS, &mut bits, None, 0)
             {
                 if !bits.is_null() {
-                    std::ptr::copy_nonoverlapping(pixels.as_ptr(), bits as *mut u32, n * n);
+                    std::ptr::copy_nonoverlapping(pixels.as_ptr(), bits as *mut u32, n * nh);
                     let old = SelectObject(mem, HGDIOBJ(bmp.0));
                     let size = SIZE {
                         cx: n as i32,
-                        cy: n as i32,
+                        cy: nh as i32,
                     };
                     let origin = POINT { x: 0, y: 0 };
                     let blend = BLENDFUNCTION {
@@ -1414,7 +1858,7 @@ mod imp {
                     reposition(h);
                     LRESULT(0)
                 }
-                WM_MIC => {
+                WM_MIC | WM_LANG => {
                     let widget = L.with(|l| l.widget.get());
                     if widget != 0 {
                         redraw(hwnd(widget));
@@ -1468,8 +1912,19 @@ mod imp {
                         };
                         let _ = TrackMouseEvent(&mut ev);
                     }
-                    if !L.with(|l| l.hover.replace(true)) {
-                        if !L.with(|l| l.pressed.get()) {
+                    // Only the mic disc opens the pill; resting on the language
+                    // indicator does not (and leaving the disc for it closes it).
+                    let mx = (lp.0 & 0xffff) as i16 as i32;
+                    let on_chip = mx >= L.with(|l| l.placed.get().map_or(i32::MAX, |p| p.h));
+                    let entered = !L.with(|l| l.hover.replace(true));
+                    let changed = L.with(|l| l.on_chip.replace(on_chip)) != on_chip;
+                    if entered || changed {
+                        if on_chip {
+                            let _ = KillTimer(Some(h), T_HOVER);
+                            if L.with(|l| l.hover_fired.replace(false)) {
+                                emit(Event::HoverEnd);
+                            }
+                        } else if !L.with(|l| l.pressed.get()) {
                             SetTimer(Some(h), T_HOVER, HOVER_MS, None);
                         }
                         redraw(h);
@@ -1491,6 +1946,7 @@ mod imp {
                     let fired = L.with(|l| {
                         l.tracking.set(false);
                         l.hover.set(false);
+                        l.on_chip.set(false);
                         l.hover_fired.replace(false)
                     });
                     let _ = KillTimer(Some(h), T_HOVER);
@@ -1504,7 +1960,7 @@ mod imp {
                     match wp.0 {
                         T_HOVER => {
                             let _ = KillTimer(Some(h), T_HOVER);
-                            if L.with(|l| l.hover.get() && !l.pressed.get()) {
+                            if L.with(|l| l.hover.get() && !l.pressed.get() && !l.on_chip.get()) {
                                 L.with(|l| l.hover_fired.set(true));
                                 emit(Event::HoverStart);
                             }
@@ -1550,12 +2006,20 @@ mod imp {
                                 (lp.0 & 0xffff) as i16 as i32,
                                 ((lp.0 >> 16) & 0xffff) as i16 as i32,
                             );
-                            let size = L.with(|l| l.placed.get().map_or(0, |p| p.size));
-                            if x >= 0 && y >= 0 && x < size && y < size {
+                            let (w, h) = L.with(|l| l.placed.get().map_or((0, 0), |p| (p.w, p.h)));
+                            if x >= 0 && y >= 0 && x < w && y < h {
                                 emit(Event::Clicked);
                             }
                         }
                     }
+                    LRESULT(0)
+                }
+                // Right click: the language menu. Like a left click it makes the
+                // taskbar the foreground window, so the focus is handed back.
+                WM_RBUTTONUP => {
+                    // The focus is handed back when the menu closes, not now:
+                    // moving it while the menu opens would close the menu.
+                    emit(Event::ContextMenu);
                     LRESULT(0)
                 }
                 WM_SETCURSOR => {

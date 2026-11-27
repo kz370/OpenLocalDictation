@@ -28,10 +28,10 @@ gpu.rs             :: restart, launcher_exe, record_launcher, mark_healthy, prov
 hardware.rs        :: detect, HardwareInfo{has_nvidia,nvidia_name,inference_threads}, GpuInfo — DXGI adapter list.
 logging.rs         :: init — daily rolling file log (7 files), LOCAL_DICTATION_LOG env filter.
 autostart.rs       :: set_enabled, sync — start-with-Windows entry pointing at the installed exe, not the GPU copy.
-taskbar.rs         :: start, stop, set_state, set_x, status, anchor, WidgetState, Event, Config - optional mic button inside the Windows taskbar: own thread, native layered child window of Shell_TrayWnd, software-rendered (module draw), hover/click/drag input, Explorer-restart recovery. Stub on other targets.
-lib.rs             :: emit_state, start_taskbar_widget, taskbar_click - every dictation://state also drives the taskbar button; widget input is routed to the dictation toggle, the hover pill and the saved offset.
+taskbar.rs         :: start, stop, set_state, set_x, set_language, set_languages, pick_language, language_label, status, anchor, WidgetState, Event, Config - optional mic button + language indicator (capsule) inside the Windows taskbar, right click opens the language menu: own thread, native layered child window of Shell_TrayWnd, software-rendered (module draw), hover/click/drag input, Explorer-restart recovery. Stub on other targets.
+lib.rs             :: emit_state, start_taskbar_widget, taskbar_click, set_language - every dictation://state also drives the taskbar button; widget input is routed to the dictation toggle, the hover pill and the saved offset.
 window.rs          :: taskbar_anchor, anchored_geometry, focus_overlay, hide_idle_overlay - pill placement above the taskbar button (event overlay://anchor).
-commands.rs        :: taskbar_widget_status, taskbar_widget_reset_position, overlay_hide_idle.
+commands.rs        :: taskbar_set_languages, taskbar_widget_status, taskbar_widget_reset_position, overlay_hide_idle.
 mic.rs             :: MicStatus, check - is there a usable microphone: the chosen (else default) capture endpoint is active and not muted (IMMDevice / IAudioEndpointVolume), and Windows' microphone privacy switches do not say Deny.
 lib.rs             :: start_mic_watch - 2 s thread; on a change drives taskbar::set_mic_ok, tray::set_mic_status and the mic://status event.
 shortcuts.rs       :: start_dictation refuses to start without a usable microphone (error mic_missing / mic_muted / mic_blocked shown in the overlay).

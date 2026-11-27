@@ -942,6 +942,10 @@ export function Overlay() {
     ],
     [shown, language]
   );
+  // The taskbar button's right-click menu lists the same languages.
+  useEffect(() => {
+    void ipc.taskbarSetLanguages(languageOptions.map((o) => ({ code: o.value, label: o.name }))).catch(quiet);
+  }, [languageOptions]);
   const changeLanguage = (code: string) => {
     void ipc
       .dictationSetLanguage(code)

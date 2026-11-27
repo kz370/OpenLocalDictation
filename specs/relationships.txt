@@ -73,6 +73,9 @@ autostart::set_enabled | calls | gpu::launcher_exe
 lib::start_taskbar_widget | calls | taskbar::start
 lib::start_taskbar_widget | calls | shortcuts::toggle_dictation
 lib::start_taskbar_widget | calls | window::show_idle_overlay
+lib::start_taskbar_widget | calls | taskbar::pick_language
+lib::start_taskbar_widget | calls | lib::set_language
+lib::setup | calls | taskbar::set_language
 lib::emit_state | calls | taskbar::set_state
 lib::start_mic_watch | calls | mic::check
 lib::start_mic_watch | calls | taskbar::set_mic_ok
@@ -91,6 +94,7 @@ src/main.tsx | renders | src/pages/Overlay.tsx
 src/main.tsx | renders | src/pages/Settings.tsx
 src/main.tsx | calls | src/settingsStore.ts
 src/pages/Overlay.tsx | calls | src/ipc.ts
+src/pages/Overlay.tsx | calls | taskbar_set_languages
 src/pages/Overlay.tsx | listens | dictation://state, dictation://target, dictation://review-shortcut, voice://event, overlay://idle, overlay://anchor, overlay://widget-hover
 src/pages/Overlay.tsx | depends_on | src/knownLanguages.ts
 commands::dictation_overlay_card | calls | window::set_overlay_card

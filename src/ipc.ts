@@ -60,6 +60,7 @@ export const ipc = {
   dictationOverlayBubble: (bubble: [number, number, number, number] | null) => invoke<void>("dictation_overlay_bubble", { bubble }),
   dictationOverlayMenu: (menu: [number, number, number, number] | null) => invoke<void>("dictation_overlay_menu", { menu }),
   overlayHideIdle: () => invoke<void>("overlay_hide_idle"),
+  taskbarSetLanguages: (items: { code: string; label: string }[]) => invoke<void>("taskbar_set_languages", { items }),
   taskbarWidgetStatus: () => invoke<TaskbarStatus>("taskbar_widget_status"),
   taskbarWidgetResetPosition: () => invoke<void>("taskbar_widget_reset_position"),
 };

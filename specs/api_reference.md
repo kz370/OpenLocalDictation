@@ -68,6 +68,7 @@ There is **no** command that removes the CUDA libraries.
 | `dictation_overlay_bubble` | `bubble: [x,y,w,h]?` | `()` | Adds the small overlay's bubble (live text or review editor) to the window's visible region, kept apart from the language-menu rectangle, or removes it. |
 | `overlay_hide_idle` | - | `()` | Hides the overlay if nothing is being dictated: the hover pill opened by the taskbar button, once the pointer has left both. |
 | `taskbar_widget_status` | - | `TaskbarStatus` | Whether the taskbar button is on the taskbar and, if not, why (Settings line). |
+| `taskbar_set_languages` | `items: { code, label }[]` | `()` | The languages the taskbar button's right-click menu lists. Sent by the overlay page whenever its language options change. |
 | `taskbar_widget_reset_position` | - | `()` | Forgets the taskbar button's position (`taskbarWidgetX` = null): it returns to the default spot beside the notification area, which is saved as its position again. Emits `settings://changed`. |
 | `dictation_overlay_menu` | `menu?: [x,y,w,h]` | `()` | Adds the open language menu to the overlay window region (or removes it). |
 

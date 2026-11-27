@@ -26,7 +26,7 @@ use std::sync::atomic::{AtomicBool, AtomicIsize, AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 use stt::session::{VoiceEvent, VoiceSessions};
 use stt::SttService;
-use tauri::{AppHandle, Emitter, Manager};
+use tauri::{AppHandle, Emitter, Listener, Manager};
 
 /// How long the overlay lingers after a dictation ends: a quick glance at
 /// "Inserted", longer for a message that has to be read.
@@ -54,6 +54,7 @@ pub(crate) fn start_taskbar_widget(app: &AppHandle) {
     let status = app.clone();
     taskbar::start(taskbar::Config {
         x: app.state::<AppState>().settings.get().taskbar_widget_x,
+        language: app.state::<AppState>().settings.get().language,
         on_event: Arc::new(move |ev| {
             let app = events.clone();
             match ev {
@@ -66,6 +67,16 @@ pub(crate) fn start_taskbar_widget(app: &AppHandle) {
                 }
                 Event::HoverEnd => {
                     let _ = app.emit("overlay://widget-hover", false);
+                }
+                Event::ContextMenu => {
+                    // A menu opens just above the indicator and blocks until it
+                    // closes: not on the widget's thread.
+                    tauri::async_runtime::spawn_blocking(move || {
+                        let current = app.state::<AppState>().settings.get().language;
+                        if let Some(code) = taskbar::pick_language(&current) {
+                            let _ = set_language(&app, code);
+                        }
+                    });
                 }
                 Event::Moved(x) => {
                     // Writes a file: not on the widget's thread.
@@ -88,6 +99,19 @@ pub(crate) fn start_taskbar_widget(app: &AppHandle) {
             window::sync_overlay_pin(&status);
         }),
     });
+}
+
+/// Remembers the dictation language and loads its models. Mid-recording the
+/// recognizer is already built, so a running take restarts on the new language.
+pub(crate) fn set_language(app: &AppHandle, language: String) -> Result<(), errors::AppError> {
+    let state = app.state::<AppState>();
+    let saved = state.settings.update(|s| s.language = language)?;
+    let _ = app.emit("settings://changed", &saved);
+    preload_models(app);
+    if state.voice.is_active() {
+        tauri::async_runtime::spawn(retry_dictation(app.clone()));
+    }
+    Ok(())
 }
 
 /// Watches the microphone for the life of the app: when it is unplugged,
@@ -472,6 +496,15 @@ pub fn run() {
             start_mic_watch(&handle);
             shortcuts::register_all(&handle);
             let _ = window::create_overlay(&handle);
+            // Every settings change passes through this event: the taskbar
+            // button shows the language that is set.
+            handle.listen("settings://changed", |ev| {
+                if let Ok(v) = serde_json::from_str::<serde_json::Value>(ev.payload()) {
+                    if let Some(code) = v.get("language").and_then(|l| l.as_str()) {
+                        taskbar::set_language(code);
+                    }
+                }
+            });
             let settings = handle.state::<AppState>().settings.get();
             if settings.taskbar_widget {
                 // A pinned overlay waits for the widget's status: it only shows
@@ -537,6 +570,7 @@ pub fn run() {
             commands::dictation_toggle,
             commands::taskbar_widget_status,
             commands::taskbar_widget_reset_position,
+            commands::taskbar_set_languages,
             commands::overlay_hide_idle,
         ])
         .build(tauri::generate_context!())
