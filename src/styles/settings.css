@@ -940,13 +940,23 @@ html[data-route="settings"] body {
   margin-inline-start: auto;
 }
 
-.lang-model-bulk-select .ss,
-.lang-model-row .ss {
+.lang-model-bulk-select .ss {
   max-width: 100%;
   min-width: 0;
 }
 
+/* One shared column for every drop-down: as wide as the longest option of any
+   row (each .ss sizes itself to its own options, the column to the widest
+   .ss), and every drop-down fills it so they all have the same width. */
+.lang-model-row .ss {
+  width: 100%;
+  min-width: 0;
+}
+
 .lang-model-list {
+  display: grid;
+  grid-template-columns: minmax(110px, 1fr) minmax(0, max-content);
+  column-gap: 12px;
   margin: 0 0 12px;
   border: 1px solid var(--border);
   border-radius: var(--radius-md);
@@ -954,10 +964,14 @@ html[data-route="settings"] body {
 
 .lang-model-row {
   display: grid;
-  grid-template-columns: minmax(110px, 170px) minmax(0, 1fr);
+  grid-column: 1 / -1;
+  grid-template-columns: subgrid;
   align-items: center;
-  gap: 12px;
   padding: 6px 12px;
+}
+
+.lang-model-list > .row-hint {
+  grid-column: 1 / -1;
 }
 
 .lang-model-row + .lang-model-row {
