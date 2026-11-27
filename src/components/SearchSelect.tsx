@@ -52,7 +52,10 @@ export function SearchSelect(props: { value: string; options: SearchOption[]; on
       position: "fixed",
       insetInlineStart: r.left,
       insetInlineEnd: "auto",
-      width: r.width,
+      // As wide as the longest option (not as wide as the button); the filter box keeps a usable minimum.
+      width: "max-content",
+      minWidth: searchable ? 180 : 0,
+      maxWidth: Math.max(160, Math.min(420, window.innerWidth - r.left - 8)),
       ...(flip ? { top: "auto", bottom: window.innerHeight - r.top + 4 } : { top: r.bottom + 4 }),
     });
     // A fixed menu does not follow its button: close when the page scrolls or resizes.
