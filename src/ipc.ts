@@ -21,6 +21,8 @@ export const ipc = {
   appInfo: () => invoke<AppInfo>("app_info"),
   openLogs: () => invoke<void>("open_logs"),
   audioInputs: () => invoke<AudioDevice[]>("audio_inputs"),
+  micTestStart: () => invoke<void>("mic_test_start"),
+  micTestStop: () => invoke<void>("mic_test_stop"),
 
   sttLoaded: () => invoke<LoadedModel[]>("stt_loaded"),
   sttLoad: (id: string) => invoke<void>("stt_load", { id }),

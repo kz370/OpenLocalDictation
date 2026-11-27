@@ -1,3 +1,4 @@
+import { Info } from "lucide-react";
 import type { ReactNode } from "react";
 
 export function Card(props: { title?: string; icon?: ReactNode; actions?: ReactNode; children: ReactNode }) {
@@ -19,13 +20,23 @@ export function Card(props: { title?: string; icon?: ReactNode; actions?: ReactN
   );
 }
 
-export function Row(props: { label: string; icon?: ReactNode; hint?: string; htmlFor?: string; children: ReactNode; end?: boolean }) {
+/** A small "i" that explains more on hover (themed tooltip), so rows can keep a one-line hint. */
+export function InfoTip({ text }: { text: string }) {
   return (
-    <div className="row">
+    <span className="info-btn" role="img" aria-label={text} title={text}>
+      <Info size={14} />
+    </span>
+  );
+}
+
+export function Row(props: { label: string; icon?: ReactNode; hint?: string; info?: string; htmlFor?: string; children: ReactNode; end?: boolean }) {
+  return (
+    <div className="row" data-row={props.label}>
       <label className={`row-label${props.icon ? " has-icon" : ""}`} htmlFor={props.htmlFor}>
         {props.icon && <span className="row-icon" aria-hidden>{props.icon}</span>}
         <span className="row-label-text">
           {props.label}
+          {props.info && <InfoTip text={props.info} />}
           {props.hint && <span className="row-hint">{props.hint}</span>}
         </span>
       </label>

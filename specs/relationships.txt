@@ -96,7 +96,15 @@ src/pages/Overlay.tsx | depends_on | src/knownLanguages.ts
 commands::dictation_overlay_card | calls | window::set_overlay_card
 commands::overlay_fit_width | calls | window::resize_overlay_mini
 src/pages/Settings.tsx | calls | src/ipc.ts
-src/pages/Settings.tsx | listens | models://changed, models://download, gpu://changed, gpu://download
+src/pages/Settings.tsx | listens | models://changed, gpu://changed, taskbar://status
+src/pages/Settings.tsx | depends_on | src/pages/settings/Sidebar.tsx
+src/pages/Settings.tsx | renders | src/pages/settings/Home.tsx, Models.tsx, Languages.tsx, Dictation.tsx, OverlaySettings.tsx, AppSettings.tsx
+src/pages/settings/Home.tsx | listens | models://changed, models://download, mic://level
+src/pages/settings/Home.tsx | calls | ipc.micTestStart, ipc.micTestStop
+src/pages/settings/Models.tsx | listens | models://changed, models://download, gpu://changed, gpu://download
+src/pages/settings/Models.tsx | depends_on | src/components/RowMenu.tsx
+commands::mic_test_start | calls | audio::capture::Capture
+lib::setup | calls | window::warm_up_overlay
 src/pages/Settings.tsx | depends_on | src/components/SearchSelect.tsx
 src/pages/Settings.tsx | depends_on | src/components/ShortcutInput.tsx
 src/pages/Settings.tsx | depends_on | src/components/controls.tsx

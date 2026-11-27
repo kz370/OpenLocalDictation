@@ -15,6 +15,8 @@ There are **28 commands**.
 | `shortcuts_capture` | `capturing: bool`, `reviewShortcuts?: bool` | `()` | `true` releases all global shortcuts (settings is recording a new one) or, with `reviewShortcuts`, swaps in the review keys; `false` re-registers the normal ones. |
 | `app_info` | — | `AppInfo` | version, paths, NVIDIA info, current and default models folder. |
 | `open_logs` | — | `()` | Opens the logs folder in Explorer. |
+| `mic_test_start` | none | `()` | Opens the chosen microphone and emits `mic://level` `{value, bands}` (about 20 per second) until `mic_test_stop`. Only levels are sent; audio is dropped at once. Refused while dictating. Used by the Home page's Test microphone. |
+| `mic_test_stop` | none | `()` | Stops the microphone test (idempotent). |
 | `audio_inputs` | — | `AudioDevice[]` | Real microphones only; loopback devices (Stereo Mix, virtual cables) are excluded. |
 | `settings_minimize` | — | `()` | Title-bar button of the frameless settings window. |
 | `settings_close` | — | `()` | Re-registers shortcuts and hides the settings window (app keeps running in the tray). |

@@ -13,8 +13,11 @@ pub const SETTINGS: &str = "settings";
 pub const OVERLAY: &str = "overlay";
 
 /// Logical size of the settings window; it never changes.
-const SETTINGS_W: f64 = 780.0;
-const SETTINGS_H: f64 = 656.0;
+const SETTINGS_W: f64 = 920.0;
+const SETTINGS_H: f64 = 660.0;
+/// The settings window can be resized, but not below what the sidebar and a card need.
+const SETTINGS_MIN_W: f64 = 820.0;
+const SETTINGS_MIN_H: f64 = 560.0;
 
 static SUPPRESS_UNTIL: AtomicU64 = AtomicU64::new(0);
 
@@ -73,9 +76,10 @@ pub fn ensure_settings(app: &AppHandle) -> tauri::Result<WebviewWindow> {
         WebviewUrl::App("index.html#/settings".into()),
     )
     .title("Open Local Dictation")
-    // Fixed size and no system frame: the page draws its own title bar.
+    // No system frame: the page draws its own title bar.
     .inner_size(SETTINGS_W, SETTINGS_H)
-    .resizable(false)
+    .min_inner_size(SETTINGS_MIN_W, SETTINGS_MIN_H)
+    .resizable(true)
     .maximizable(false)
     .decorations(false)
     .center()
@@ -513,6 +517,10 @@ fn set_overlay_region(app: &AppHandle, w: &WebviewWindow, clip: bool) {
     }
     if clip {
         strip_frame_styles(raw);
+        if WARMING.load(Ordering::SeqCst) {
+            clip_overlay_to_nothing(app);
+            return;
+        }
     }
     let scale = w.scale_factor().unwrap_or(1.0);
     let px = |v: f64| (v * scale).round() as i32;
@@ -783,6 +791,46 @@ fn docked_y(w: &WebviewWindow, x: i32, y: i32) -> Option<i32> {
 /// Shows the dictation overlay at its last dragged spot, or centered near the
 /// bottom without taking focus if it was never dragged (or that spot's
 /// monitor is no longer connected).
+/// True while the overlay is being warmed up (see `warm_up_overlay`): its
+/// region is held empty, whatever the page reports, so nothing can be seen.
+static WARMING: AtomicBool = AtomicBool::new(false);
+/// How long the warm-up keeps the (invisible) window shown, so its page can
+/// load and paint once before the first real show.
+const WARM_UP_MS: u64 = 2500;
+
+/// Shows the overlay once at start-up while clipped to nothing, then hides it.
+/// A window that has never been shown has never painted: its first real show
+/// (the tray click) drew the window's bare frame for a frame, until the page
+/// had painted and sent its shape. After the warm-up the page has painted, so
+/// the first real show looks like every later one. Does nothing when the
+/// overlay is already on screen (pinned) or gets shown meanwhile.
+pub fn warm_up_overlay(app: &AppHandle) {
+    let Ok(w) = create_overlay(app) else { return };
+    let app2 = app.clone();
+    on_main(app, move || {
+        if w.is_visible().unwrap_or(false) {
+            return;
+        }
+        WARMING.store(true, Ordering::SeqCst);
+        // Same order as a real show: no frame styles, an empty region, then show.
+        set_overlay_region(&app2, &w, true);
+        let _ = w.show();
+        set_overlay_region(&app2, &w, true);
+        let (app3, w3) = (app2.clone(), w.clone());
+        std::thread::spawn(move || {
+            std::thread::sleep(std::time::Duration::from_millis(WARM_UP_MS));
+            let app4 = app3.clone();
+            on_main(&app3, move || {
+                // A real show in the meantime ended the warm-up and owns the window.
+                if WARMING.swap(false, Ordering::SeqCst) {
+                    let _ = w3.hide();
+                    set_overlay_region(&app4, &w3, false);
+                }
+            });
+        });
+    });
+}
+
 pub fn show_overlay(app: &AppHandle) {
     let Ok(w) = create_overlay(app) else { return };
     let app2 = app.clone();
@@ -814,6 +862,8 @@ fn card_on_screen(w: &WebviewWindow, x: i32, y: i32) -> (i32, i32) {
 }
 
 fn show_overlay_now(app: &AppHandle, w: &WebviewWindow) {
+    // A real show takes over from a warm-up that is still running.
+    WARMING.store(false, Ordering::SeqCst);
     let saved = app.state::<AppState>().settings.get();
     suppress_persistence();
     *MENU_RECT.lock().unwrap_or_else(|p| p.into_inner()) = None;

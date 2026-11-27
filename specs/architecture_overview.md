@@ -21,7 +21,7 @@ Non-goals: chat, any LLM, text-to-speech, MCP, history database, text correction
 
 ```text
 React UI (WebView2)
-  pages/Overlay.tsx   pages/Settings.tsx   components/*   settingsStore.ts   ipc.ts
+  pages/Overlay.tsx   pages/Settings.tsx + pages/settings/*   components/*   settingsStore.ts   ipc.ts
         │  invoke(commands) / listen(events)
 Tauri backend (Rust, src-tauri/src)
   commands.rs  ── thin IPC layer
@@ -46,7 +46,7 @@ Native: sherpa-onnx + ONNX Runtime DLLs (shared), WASAPI via cpal, Win32 SendInp
 | Label | Purpose | Frame |
 |---|---|---|
 | `overlay` | The dictation card. Transparent, always on top, no taskbar entry, clipped to the card with a window region; does not take focus while listening, takes it in review. | none |
-| `settings` | Five tabs (Speech model, Processing, Dictation, Overlay, App). Fixed 780 x 656, not resizable or maximizable. | none; the page draws its own title bar (minimize, close-to-tray) |
+| `settings` | A left sidebar (Home, Models, Languages, Dictation, Overlay, App) and one page at a time. 920 x 660, resizable down to 820 x 560, not maximizable. | none; the page draws its own title bar (minimize, close-to-tray) |
 
 A third surface, not a Tauri window, is the **taskbar button** (`taskbar.rs`, opt-in `taskbarWidget`): a small layered native window that is a child of `Shell_TrayWnd`, on its own thread so a stall can never block Explorer. It is the bubble style's circle moved into the taskbar: while it is on, the app draws no circle of its own and the pill (the overlay window, anchored by `window::anchored_geometry`) opens above it on hover, click or dictation. Only a bottom taskbar is supported.
 

@@ -5,6 +5,8 @@ import type { AppErrorPayload, Settings } from "./types";
 interface SettingsState {
   settings: Settings | null;
   error: AppErrorPayload | null;
+  /** When the last change was saved (ms since epoch), for the "Saved" chip. */
+  savedAt: number;
   load: () => Promise<Settings>;
   /** Applies `mutate` to a copy of the current settings and persists it. */
   update: (mutate: (draft: Settings) => void) => Promise<void>;
@@ -14,6 +16,7 @@ interface SettingsState {
 export const useSettings = create<SettingsState>((set, get) => ({
   settings: null,
   error: null,
+  savedAt: 0,
   load: async () => {
     const s = await ipc.getSettings();
     set({ settings: s });
@@ -29,7 +32,7 @@ export const useSettings = create<SettingsState>((set, get) => ({
     applyTheme(draft.theme);
     try {
       const saved = await ipc.saveSettings(draft);
-      set({ settings: saved, error: null });
+      set({ settings: saved, error: null, savedAt: Date.now() });
       applyTheme(saved.theme);
     } catch (e) {
       set({ settings: current, error: toAppError(e) });

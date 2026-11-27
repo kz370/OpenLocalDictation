@@ -8,6 +8,7 @@ import { SettingsPage } from "./pages/Settings";
 import "./styles/tokens.css";
 import "./styles/base.css";
 import "./styles/app.css";
+import "./styles/settings.css";
 
 type Route = "settings" | "overlay";
 

@@ -483,6 +483,8 @@ pub fn run() {
             // Pre-create settings hidden: on-demand creation flakes on some
             // machines while startup-created webviews always work.
             let _ = window::ensure_settings(&handle);
+            // Paint the overlay's page once while invisible, so the tray's first click shows no bare frame.
+            window::warm_up_overlay(&handle);
             preload_models(&handle);
             // Nothing to listen with yet: open the settings so a model can be chosen.
             if !ready {
@@ -498,6 +500,8 @@ pub fn run() {
             commands::app_info,
             commands::open_logs,
             commands::audio_inputs,
+            commands::mic_test_start,
+            commands::mic_test_stop,
             commands::models_list,
             commands::stt_loaded,
             commands::stt_load,

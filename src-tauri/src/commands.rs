@@ -165,6 +165,68 @@ pub async fn audio_inputs() -> CmdResult<Vec<AudioDevice>> {
         .map_err(|e| AppError::Audio(e.to_string()))
 }
 
+/// Stop flag of the running microphone test (Home page level meter), if any.
+static MIC_TEST: std::sync::Mutex<Option<std::sync::Arc<std::sync::atomic::AtomicBool>>> =
+    std::sync::Mutex::new(None);
+
+#[derive(Clone, Serialize)]
+struct MicLevel {
+    value: f32,
+    bands: Vec<f32>,
+}
+
+/// Opens the chosen microphone and emits `mic://level` (meter 0..1 and
+/// spectrum bands, about 20 per second) until `mic_test_stop`. Only levels are
+/// sent; the audio itself is dropped on the spot. Refused while dictating.
+#[tauri::command]
+pub fn mic_test_start(app: AppHandle, state: State<'_, AppState>) -> CmdResult<()> {
+    use crate::audio::capture::{Capture, CaptureEvent};
+    use std::sync::atomic::Ordering;
+    if state.dictation_busy.load(Ordering::SeqCst) {
+        return Err(AppError::Audio(
+            "dictation is running; the microphone test starts when it ends".into(),
+        ));
+    }
+    let stop = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
+    if let Some(old) = MIC_TEST.lock().unwrap().replace(stop.clone()) {
+        old.store(true, Ordering::SeqCst);
+    }
+    let device = state.settings.get().microphone;
+    let (mut capture, rx) = match Capture::start(device.as_deref()) {
+        Ok(c) => c,
+        Err(e) => {
+            MIC_TEST.lock().unwrap().take();
+            return Err(e);
+        }
+    };
+    std::thread::Builder::new()
+        .name("mic-test".into())
+        .spawn(move || {
+            while !stop.load(Ordering::SeqCst) {
+                match rx.recv_timeout(std::time::Duration::from_millis(100)) {
+                    Ok(CaptureEvent::Level(value, bands)) => {
+                        let _ = app.emit("mic://level", MicLevel { value, bands });
+                    }
+                    Ok(CaptureEvent::Samples(_)) => {}
+                    Ok(CaptureEvent::Error(_))
+                    | Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => break,
+                    Err(std::sync::mpsc::RecvTimeoutError::Timeout) => {}
+                }
+            }
+            capture.stop();
+        })
+        .map_err(|e| AppError::Audio(e.to_string()))?;
+    Ok(())
+}
+
+/// Stops the microphone test (idempotent).
+#[tauri::command]
+pub fn mic_test_stop() {
+    if let Some(stop) = MIC_TEST.lock().unwrap().take() {
+        stop.store(true, std::sync::atomic::Ordering::SeqCst);
+    }
+}
+
 // ---------------------------------------------------------------------------
 // Speech models
 // ---------------------------------------------------------------------------
