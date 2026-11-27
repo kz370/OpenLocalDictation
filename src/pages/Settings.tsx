@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
-import { Brain, Check, Home, Languages, Mic, Minus, PictureInPicture2, SlidersHorizontal, X } from "lucide-react";
+import { Brain, Check, Copy, Home, Languages, Mic, Minus, PictureInPicture2, SlidersHorizontal, Square, X } from "lucide-react";
 import { ipc, on } from "../ipc";
 import { useSettings } from "../settingsStore";
 import type { AppInfo, AudioDevice, GpuStatus, ModelEntry, Settings, TaskbarStatus } from "../types";
@@ -109,6 +109,13 @@ export function SettingsPage() {
     const sub = on<TaskbarStatus>("taskbar://status", setTaskbar);
     return () => void sub.then((u) => u());
   }, []);
+  // The title bar's maximize button: Maximize, or Restore while maximized (also by double-clicking the bar).
+  const [maximized, setMaximized] = useState(false);
+  useEffect(() => {
+    void ipc.settingsIsMaximized().then(setMaximized).catch(() => undefined);
+    const sub = on<boolean>("settings://maximized", setMaximized);
+    return () => void sub.then((u) => u());
+  }, []);
   // What the sidebar flags: no model yet, or a GPU change waiting for a restart.
   useEffect(() => {
     const refreshModels = () => void ipc.modelsList().then(setModels).catch(() => undefined);
@@ -162,6 +169,9 @@ export function SettingsPage() {
         <div className="titlebar-buttons">
           <button type="button" className="icon-btn" aria-label="Minimize" title="Minimize" onClick={() => void ipc.settingsMinimize()}>
             <Minus size={14} />
+          </button>
+          <button type="button" className="icon-btn" aria-label={maximized ? "Restore" : "Maximize"} title={maximized ? "Restore" : "Maximize"} onClick={() => void ipc.settingsToggleMaximize().then(setMaximized).catch(() => undefined)}>
+            {maximized ? <Copy size={12} /> : <Square size={12} />}
           </button>
           <button type="button" className="icon-btn close" aria-label="Close" title="Close (keeps running in the tray)" onClick={() => void ipc.settingsClose()}>
             <X size={14} />

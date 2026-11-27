@@ -516,6 +516,8 @@ pub fn run() {
             commands::gpu_cancel,
             commands::app_restart,
             commands::settings_minimize,
+            commands::settings_toggle_maximize,
+            commands::settings_is_maximized,
             commands::settings_close,
             commands::dictation_cancel,
             commands::dictation_insert_now,

@@ -38,6 +38,8 @@ export const ipc = {
   gpuInstall: () => invoke<void>("gpu_install"),
   gpuCancel: () => invoke<void>("gpu_cancel"),
   settingsMinimize: () => invoke<void>("settings_minimize"),
+  settingsToggleMaximize: () => invoke<boolean>("settings_toggle_maximize"),
+  settingsIsMaximized: () => invoke<boolean>("settings_is_maximized"),
   settingsClose: () => invoke<void>("settings_close"),
   appRestart: () => invoke<void>("app_restart"),
 

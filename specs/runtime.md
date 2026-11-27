@@ -121,3 +121,4 @@ Files Processed: 65 — COMPLETE
 - [2026-11-27T20:00:00Z] `SearchSelect` menu width now fits its longest option instead of copying the (wide) button's width.
 - [2026-11-27T20:30:00Z] `SearchSelect` button is now as wide as its longest option too (invisible `.ss-size` copies of every label size it), not the width of the current value or a fixed column.
 - [2026-11-27T21:00:00Z] Model per language list: all drop-downs share one right-aligned column as wide as the longest option of any row (grid with subgrid rows).
+- [2026-11-27T21:30:00Z] Settings window: maximize / restore button on the title bar (`settings_toggle_maximize`, `settings_is_maximized`, event `settings://maximized`); the window is created maximizable.

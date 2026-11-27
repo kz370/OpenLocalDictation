@@ -585,6 +585,29 @@ pub fn settings_minimize(app: AppHandle) {
     }
 }
 
+/// Maximizes the settings window, or puts it back to its size. Returns whether
+/// it is maximized now.
+#[tauri::command]
+pub fn settings_toggle_maximize(app: AppHandle) -> bool {
+    let Some(w) = app.get_webview_window(window::SETTINGS) else {
+        return false;
+    };
+    if w.is_maximized().unwrap_or(false) {
+        let _ = w.unmaximize();
+    } else {
+        let _ = w.maximize();
+    }
+    w.is_maximized().unwrap_or(false)
+}
+
+/// Whether the settings window is maximized (the title bar's button icon).
+#[tauri::command]
+pub fn settings_is_maximized(app: AppHandle) -> bool {
+    app.get_webview_window(window::SETTINGS)
+        .and_then(|w| w.is_maximized().ok())
+        .unwrap_or(false)
+}
+
 /// Closing the settings only hides them; dictation keeps running in the tray.
 #[tauri::command]
 pub fn settings_close(app: AppHandle) {

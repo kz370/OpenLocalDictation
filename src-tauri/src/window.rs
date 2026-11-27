@@ -80,7 +80,7 @@ pub fn ensure_settings(app: &AppHandle) -> tauri::Result<WebviewWindow> {
     .inner_size(SETTINGS_W, SETTINGS_H)
     .min_inner_size(SETTINGS_MIN_W, SETTINGS_MIN_H)
     .resizable(true)
-    .maximizable(false)
+    .maximizable(true)
     .decorations(false)
     .center()
     .visible(false)
@@ -89,12 +89,25 @@ pub fn ensure_settings(app: &AppHandle) -> tauri::Result<WebviewWindow> {
     // a close mid-shortcut-recording must still re-register the hotkey.
     let h = app.clone();
     w.on_window_event(move |e| {
-        if let tauri::WindowEvent::CloseRequested { api, .. } = e {
-            api.prevent_close();
-            crate::shortcuts::register_all(&h);
-            if let Some(w) = h.get_webview_window(SETTINGS) {
-                let _ = w.hide();
+        match e {
+            tauri::WindowEvent::CloseRequested { api, .. } => {
+                api.prevent_close();
+                crate::shortcuts::register_all(&h);
+                if let Some(w) = h.get_webview_window(SETTINGS) {
+                    let _ = w.hide();
+                }
             }
+            // The title bar's maximize button shows Maximize or Restore by this.
+            tauri::WindowEvent::Resized(_) => {
+                if let Some(w) = h.get_webview_window(SETTINGS) {
+                    let _ = h.emit_to(
+                        SETTINGS,
+                        "settings://maximized",
+                        w.is_maximized().unwrap_or(false),
+                    );
+                }
+            }
+            _ => {}
         }
     });
     Ok(w)

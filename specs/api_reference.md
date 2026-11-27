@@ -19,6 +19,8 @@ There are **28 commands**.
 | `mic_test_stop` | none | `()` | Stops the microphone test (idempotent). |
 | `audio_inputs` | — | `AudioDevice[]` | Real microphones only; loopback devices (Stereo Mix, virtual cables) are excluded. |
 | `settings_minimize` | — | `()` | Title-bar button of the frameless settings window. |
+| `settings_toggle_maximize` | — | `bool` | Title-bar button: maximizes the settings window or restores it; returns whether it is maximized now. |
+| `settings_is_maximized` | — | `bool` | Whether the settings window is maximized (the button's icon). |
 | `settings_close` | — | `()` | Re-registers shortcuts and hides the settings window (app keeps running in the tray). |
 | `app_restart` | — | `()` | Starts the installed exe with `--delay 1500` and quits this process (GPU/CPU switch). |
 
@@ -85,6 +87,7 @@ There is **no** command that removes the CUDA libraries.
 | `overlay://hidden` | `()` | overlay | The overlay is about to hide: the page resets to a bare idle card and turns invisible until the next `overlay://shown`. |
 | `voice://event` | `VoiceEvent` | overlay | Only `level` (value + 24 spectrum bands) and `partial` (live text). |
 | `settings://changed` | `Settings` | all | |
+| `settings://maximized` | `bool` | settings | The settings window was resized: whether it is maximized (Maximize or Restore icon on the title bar). |
 | `models://changed` | — | all | Re-read `models_list`. |
 | `models://download` | `DownloadProgress` | all | |
 | `gpu://changed` | — | all | Re-read `gpu_status`. |
