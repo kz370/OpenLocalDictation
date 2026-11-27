@@ -73,7 +73,6 @@ autostart::set_enabled | calls | gpu::launcher_exe
 lib::start_taskbar_widget | calls | taskbar::start
 lib::start_taskbar_widget | calls | shortcuts::toggle_dictation
 lib::start_taskbar_widget | calls | window::show_idle_overlay
-lib::start_taskbar_widget | calls | taskbar::pick_language
 lib::start_taskbar_widget | calls | lib::set_language
 lib::setup | calls | taskbar::set_language
 lib::emit_state | calls | taskbar::set_state

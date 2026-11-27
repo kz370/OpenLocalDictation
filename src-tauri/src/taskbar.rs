@@ -52,8 +52,9 @@ pub enum Event {
     /// The pointer rested on the button for the hover delay.
     HoverStart,
     HoverEnd,
-    /// Right click on the button: the language menu opens above it.
-    ContextMenu,
+    /// A language (`auto` or a code) was chosen from the menu a right click on
+    /// the button opens above it.
+    LanguagePicked(String),
     /// The button has a position to remember: where a drag left it, or the
     /// default spot it was given the first time. Logical px from the taskbar's
     /// left edge.
@@ -164,7 +165,7 @@ pub fn anchor() -> Option<Anchor> {
 }
 
 #[cfg(windows)]
-pub use imp::{pick_language, set_language, set_mic_ok, set_state, set_x, start, stop};
+pub use imp::{set_language, set_mic_ok, set_state, set_x, start, stop};
 
 #[cfg(not(windows))]
 pub fn start(_config: Config) {}
@@ -178,10 +179,6 @@ pub fn set_x(_x: Option<i32>) {}
 pub fn set_mic_ok(_ok: bool) {}
 #[cfg(not(windows))]
 pub fn set_language(_code: &str) {}
-#[cfg(not(windows))]
-pub fn pick_language(_current: &str) -> Option<String> {
-    None
-}
 
 /// Drawing: pure software rendering into premultiplied BGRA, so the button has
 /// per-pixel alpha (soft edges, halo) without a graphics library.
@@ -652,10 +649,11 @@ mod imp {
     };
     use windows::Win32::System::LibraryLoader::GetModuleHandleW;
     use windows::Win32::System::Registry::{RegGetValueW, HKEY_CURRENT_USER, RRF_RT_REG_DWORD};
+    use windows::Win32::UI::Accessibility::{SetWinEventHook, UnhookWinEvent, HWINEVENTHOOK};
     use windows::Win32::UI::HiDpi::GetDpiForWindow;
     use windows::Win32::UI::Input::KeyboardAndMouse::{
-        GetKeyState, ReleaseCapture, SetCapture, TrackMouseEvent, TME_LEAVE, TRACKMOUSEEVENT,
-        VK_CONTROL,
+        GetAsyncKeyState, GetKeyState, ReleaseCapture, SetCapture, TrackMouseEvent, TME_LEAVE,
+        TRACKMOUSEEVENT, VK_CONTROL, VK_RBUTTON,
     };
     use windows::Win32::UI::WindowsAndMessaging::*;
 
@@ -681,6 +679,9 @@ mod imp {
     const DRAG_SLOP: i32 = 4;
     const POLL_MS: u32 = 500;
     const HOVER_MS: u32 = 300;
+    /// A right release this soon after a right press closed the menu belongs
+    /// to that press (it does not open the menu again).
+    const TOGGLE_MS: u64 = 1500;
     /// Idle is held back this long: the voice session reports "idle" a moment
     /// before the dictation that follows reports its own state.
     const IDLE_DELAY_MS: u32 = 200;
@@ -697,6 +698,9 @@ mod imp {
     static CTL: AtomicIsize = AtomicIsize::new(0);
     static MIC_OK: AtomicBool = AtomicBool::new(true);
     static MENU_OPEN: AtomicBool = AtomicBool::new(false);
+    /// When the language menu was last closed by a right press on the button
+    /// (see `language_menu`).
+    static MENU_CLOSED_AT: Mutex<Option<Instant>> = Mutex::new(None);
     static RUNNING: AtomicBool = AtomicBool::new(false);
     static WANTED: AtomicBool = AtomicBool::new(false);
     static STATE: AtomicU8 = AtomicU8::new(0);
@@ -706,6 +710,8 @@ mod imp {
     static CONFIG: Mutex<Option<Config>> = Mutex::new(None);
     /// The language indicator's text (`AUTO`, `EN`, ...).
     static LABEL: Mutex<String> = Mutex::new(String::new());
+    /// The language setting itself (`auto` or a code): the menu ticks it.
+    static LANGUAGE: Mutex<String> = Mutex::new(String::new());
     /// The foreground window just before the last click on the button.
     static PREV_FG: AtomicIsize = AtomicIsize::new(0);
 
@@ -860,6 +866,7 @@ mod imp {
     pub fn start(config: Config) {
         X.store(config.x.unwrap_or(-1), Ordering::Relaxed);
         *LABEL.lock().unwrap_or_else(|p| p.into_inner()) = super::language_label(&config.language);
+        *LANGUAGE.lock().unwrap_or_else(|p| p.into_inner()) = config.language.clone();
         *CONFIG.lock().unwrap_or_else(|p| p.into_inner()) = Some(config);
         WANTED.store(true, Ordering::SeqCst);
         if RUNNING.swap(true, Ordering::SeqCst) {
@@ -927,6 +934,7 @@ mod imp {
 
     /// Sets the dictation language shown beside the mic (`auto` or a code).
     pub fn set_language(code: &str) {
+        *LANGUAGE.lock().unwrap_or_else(|p| p.into_inner()) = code.to_string();
         let label = super::language_label(code);
         {
             let mut g = LABEL.lock().unwrap_or_else(|p| p.into_inner());
@@ -945,25 +953,77 @@ mod imp {
     }
 
     /// Shows the language menu just above the taskbar at the pointer (the
-    /// button's indicator was right-clicked) and returns the code chosen, if
-    /// any. Blocks until the menu closes, so it runs on a thread of its own,
-    /// never the widget's: the menu is owned by a hidden window made here.
-    pub fn pick_language(current: &str) -> Option<String> {
-        // One menu at a time: a second right click while it is open does nothing.
+    /// button was right-clicked) and returns the code chosen, if any.
+    ///
+    /// It runs on the widget's own thread and the widget owns it. The widget
+    /// is a child of Explorer's taskbar, so this thread shares its input with
+    /// the taskbar, which the right click has just brought to the front: the
+    /// menu opens in the foreground without taking it. A menu on another
+    /// thread, owned by a window of its own, had to take the foreground from
+    /// Explorer and was closed at once. The menu's modal loop keeps dispatching
+    /// this thread's messages, so the button keeps drawing while it is open.
+    fn language_menu(owner: HWND) -> Option<String> {
+        // A right click on the button while the menu is open closes it on the
+        // press; the release that follows must not open it again (by then the
+        // focus has gone back to the app, and a menu opened then would not
+        // close on a click elsewhere). So a second right click toggles it shut.
+        let closed_on_button = MENU_CLOSED_AT
+            .lock()
+            .unwrap_or_else(|p| p.into_inner())
+            .take()
+            .is_some_and(|t| t.elapsed() < Duration::from_millis(TOGGLE_MS));
+        if closed_on_button {
+            return None;
+        }
+        // One menu at a time.
         if MENU_OPEN.swap(true, Ordering::SeqCst) {
             return None;
         }
-        let picked = pick_language_inner(current);
+        let picked = language_menu_inner(owner);
         MENU_OPEN.store(false, Ordering::SeqCst);
+        if picked.is_none() && over_window(owner) && right_button_down() {
+            *MENU_CLOSED_AT.lock().unwrap_or_else(|p| p.into_inner()) = Some(Instant::now());
+        }
         picked
     }
 
-    unsafe extern "system" fn owner_proc(h: HWND, msg: u32, wp: WPARAM, lp: LPARAM) -> LRESULT {
-        // SAFETY: the stock window procedure, called with the arguments it was given.
-        unsafe { DefWindowProcW(h, msg, wp, lp) }
+    /// Whether the pointer is over `h`.
+    fn over_window(h: HWND) -> bool {
+        // SAFETY: a plain query.
+        unsafe { WindowFromPoint(cursor()) == h }
     }
 
-    fn pick_language_inner(current: &str) -> Option<String> {
+    /// Whether the right mouse button is held right now.
+    fn right_button_down() -> bool {
+        // SAFETY: a plain query.
+        unsafe { GetAsyncKeyState(VK_RBUTTON.0 as i32) < 0 }
+    }
+
+    /// Called on this thread (out of context, through the menu's modal loop)
+    /// when another window comes to the front while the language menu is
+    /// open: the menu closes, as a menu does when its app loses the front.
+    unsafe extern "system" fn close_menu_on_foreground(
+        _hook: HWINEVENTHOOK,
+        _event: u32,
+        fg: HWND,
+        _id_object: i32,
+        _id_child: i32,
+        _thread: u32,
+        _time: u32,
+    ) {
+        // The taskbar itself, or the menu, coming to the front is not a
+        // reason to close.
+        let class = class_of(fg);
+        if class.starts_with("Shell_") || class == "#32768" {
+            return;
+        }
+        // SAFETY: ends this thread's own menu, if one is open.
+        unsafe {
+            let _ = EndMenu();
+        }
+    }
+
+    fn language_menu_inner(owner: HWND) -> Option<String> {
         let items = super::languages();
         let Some(anchor) = SHARED.lock().unwrap_or_else(|p| p.into_inner()).anchor else {
             tracing::warn!("language menu: the taskbar button has no position");
@@ -973,10 +1033,16 @@ mod imp {
             tracing::warn!("language menu: the language list has not arrived yet");
             return None;
         }
-        let current = if current.is_empty() { "auto" } else { current };
+        let current = LANGUAGE.lock().unwrap_or_else(|p| p.into_inner()).clone();
+        let current = if current.trim().is_empty() {
+            "auto".to_string()
+        } else {
+            current
+        };
         let at = cursor();
         let y = anchor.top - (GAP * anchor.scale as f32).round() as i32;
-        // SAFETY: a menu and a window made, used and destroyed on this thread.
+        // SAFETY: a menu made, used and destroyed on this thread; the owner is
+        // this thread's own window.
         unsafe {
             let menu = CreatePopupMenu().ok()?;
             for (i, it) in items.iter().enumerate() {
@@ -988,60 +1054,39 @@ mod imp {
                 };
                 let _ = AppendMenuW(menu, flags, i + 1, PCWSTR(text.as_ptr()));
             }
-            // A window class of our own (the stock "STATIC" one gave a window
-            // the menu would not take as its owner).
-            let class = w!("OpenLocalDictationMenuOwner");
-            let hinst = GetModuleHandleW(None).ok().map(|m| HINSTANCE(m.0));
-            let _ = RegisterClassW(&WNDCLASSW {
-                lpfnWndProc: Some(owner_proc),
-                hInstance: hinst.unwrap_or_default(),
-                lpszClassName: class,
-                ..Default::default()
-            });
-            let owner = match CreateWindowExW(
-                WS_EX_TOOLWINDOW,
-                class,
-                w!(""),
-                WS_POPUP,
-                0,
-                0,
-                0,
-                0,
-                None,
-                None,
-                hinst,
-                None,
-            ) {
-                Ok(o) => Some(o),
-                Err(e) => {
-                    tracing::warn!(error = %e, "language menu: no owner window");
-                    None
-                }
-            };
-            // The owner must be in front, or a click elsewhere would not close
-            // the menu (and a menu whose owner loses the front closes at once).
-            if let Some(o) = owner {
-                for _ in 0..5 {
-                    let _ = SetForegroundWindow(o);
-                    if GetForegroundWindow() == o {
-                        break;
-                    }
-                    std::thread::sleep(Duration::from_millis(15));
-                }
-                if GetForegroundWindow() != o {
-                    tracing::warn!("language menu: could not take the foreground");
-                }
+            // A menu closes on a click elsewhere only while the top-level
+            // window above its owner is in front. The right click does not
+            // always bring the taskbar there, so it is brought there now (this
+            // thread shares the taskbar's input and just had the click, so
+            // Windows allows it).
+            let root = GetAncestor(owner, GA_ROOT);
+            if !root.0.is_null() && GetForegroundWindow() != root {
+                let _ = SetForegroundWindow(root);
             }
+            // And if the front moves anyway (a click on another app, Alt+Tab,
+            // a window popping up), the menu closes with it.
+            let hook = SetWinEventHook(
+                EVENT_SYSTEM_FOREGROUND,
+                EVENT_SYSTEM_FOREGROUND,
+                None,
+                Some(close_menu_on_foreground),
+                0,
+                0,
+                WINEVENT_OUTOFCONTEXT,
+            );
             let opened = Instant::now();
             let cmd = TrackPopupMenu(
                 menu,
-                TPM_BOTTOMALIGN | TPM_CENTERALIGN | TPM_RETURNCMD | TPM_NONOTIFY,
+                TPM_BOTTOMALIGN | TPM_CENTERALIGN | TPM_RETURNCMD | TPM_NONOTIFY | TPM_RIGHTBUTTON,
                 at.x,
                 y,
                 None,
-                owner.unwrap_or_default(),
+                owner,
                 None,
             );
+            if !hook.is_invalid() {
+                let _ = UnhookWinEvent(hook);
+            }
             let n = cmd.0;
             if n <= 0 && opened.elapsed() < Duration::from_millis(250) {
                 tracing::warn!(
@@ -1050,9 +1095,9 @@ mod imp {
                 );
             }
             let _ = DestroyMenu(menu);
-            if let Some(o) = owner {
-                let _ = DestroyWindow(o);
-            }
+            // The documented fix for a menu that will not close on the next
+            // click elsewhere: wake the owner's queue once it is done.
+            let _ = PostMessageW(Some(owner), WM_NULL, WPARAM(0), LPARAM(0));
             // The app being dictated into gets the focus back.
             restore_foreground();
             (n > 0).then(|| items.get(n as usize - 1).map(|it| it.code.clone()))?
@@ -2019,7 +2064,11 @@ mod imp {
                 WM_RBUTTONUP => {
                     // The focus is handed back when the menu closes, not now:
                     // moving it while the menu opens would close the menu.
-                    emit(Event::ContextMenu);
+                    // No hover pill while the menu is up.
+                    let _ = KillTimer(Some(h), T_HOVER);
+                    if let Some(code) = language_menu(h) {
+                        emit(Event::LanguagePicked(code));
+                    }
                     LRESULT(0)
                 }
                 WM_SETCURSOR => {

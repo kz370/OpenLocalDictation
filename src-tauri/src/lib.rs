@@ -68,14 +68,10 @@ pub(crate) fn start_taskbar_widget(app: &AppHandle) {
                 Event::HoverEnd => {
                     let _ = app.emit("overlay://widget-hover", false);
                 }
-                Event::ContextMenu => {
-                    // A menu opens just above the indicator and blocks until it
-                    // closes: not on the widget's thread.
+                Event::LanguagePicked(code) => {
+                    // Writes the settings file: not on the widget's thread.
                     tauri::async_runtime::spawn_blocking(move || {
-                        let current = app.state::<AppState>().settings.get().language;
-                        if let Some(code) = taskbar::pick_language(&current) {
-                            let _ = set_language(&app, code);
-                        }
+                        let _ = set_language(&app, code);
                     });
                 }
                 Event::Moved(x) => {

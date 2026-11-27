@@ -64,7 +64,7 @@ taskbar stalls with it. So the widget gets a dedicated thread with its own
 message loop, doing nothing but drawing and forwarding input:
 
 - Inputs go out as messages on a channel (`std::sync::mpsc` or a tokio
-  channel) to the app: `Clicked`, `HoverStart`, `HoverEnd`, `ContextMenu`.
+  channel) to the app: `Clicked`, `HoverStart`, `HoverEnd`, `LanguagePicked`.
 - State changes come in via `PostMessageW(hwnd, WM_APP + n, ...)` so the
   widget thread never blocks on app locks.
 - Nothing slow (model loading, transcription, file I/O) ever runs there.
