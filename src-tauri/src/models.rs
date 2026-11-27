@@ -122,6 +122,28 @@ pub static CATALOG: &[CatalogModel] = &[
             tokens(),
         ],
     },
+    CatalogModel {
+        id: "whisper-turbo",
+        name: "Whisper large-v3 turbo",
+        blurb: "Near large-v3 accuracy at a fraction of the decoding cost. Best on a GPU.",
+        repo: "sherpa-onnx-whisper-turbo",
+        prefix: "turbo",
+        files: &[
+            RemoteFile {
+                name: "-encoder.int8.onnx",
+                dest: "encoder.int8.onnx",
+                sha256: "b02dcdf54f348741e93fe732b67d933c8dcb6735655f710640143081db38878b",
+                size_bytes: 674_716_297,
+            },
+            RemoteFile {
+                name: "-decoder.int8.onnx",
+                dest: "decoder.int8.onnx",
+                sha256: "20accd02388482eb3a46bd615631adfdc85e1eb2c7db9ea3f02a40ffe6b81547",
+                size_bytes: 361_080_764,
+            },
+            tokens(),
+        ],
+    },
 ];
 
 pub fn find(id: &str) -> Option<&'static CatalogModel> {
@@ -487,7 +509,7 @@ mod tests {
 
     #[test]
     fn catalog_is_consistent() {
-        assert_eq!(CATALOG.len(), 3);
+        assert_eq!(CATALOG.len(), 4);
         for m in CATALOG {
             for f in m.files {
                 assert_eq!(f.sha256.len(), 64);
@@ -581,7 +603,7 @@ mod tests {
                 ],
             ),
             (
-                "whisper-turbo",
+                "whisper-custom",
                 ["encoder.int8.onnx", "decoder.int8.onnx", "tokens.txt"],
             ),
         ] {
@@ -598,7 +620,7 @@ mod tests {
             );
             assert!(!store.is_installed("whisper-tiny"));
             let custom: Vec<String> = store.custom_models().into_iter().map(|m| m.name).collect();
-            assert_eq!(custom, vec!["whisper-turbo"]);
+            assert_eq!(custom, vec!["whisper-custom"]);
             assert_eq!(store.resolve("").unwrap().id, "whisper-base");
         }
         // A download into the stt folder itself does not nest another stt/ folder.

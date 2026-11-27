@@ -5,6 +5,8 @@ export interface AppErrorPayload {
 
 export interface Settings {
   model: string;
+  /** Model per language code; a language without an entry uses `model`. */
+  languageModels: Record<string, string>;
   modelsDir: string;
   device: "gpu" | "cpu";
   language: string;

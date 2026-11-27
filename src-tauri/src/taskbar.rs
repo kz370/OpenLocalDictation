@@ -467,7 +467,8 @@ mod imp {
     use windows::Win32::System::Registry::{RegGetValueW, HKEY_CURRENT_USER, RRF_RT_REG_DWORD};
     use windows::Win32::UI::HiDpi::GetDpiForWindow;
     use windows::Win32::UI::Input::KeyboardAndMouse::{
-        ReleaseCapture, SetCapture, TrackMouseEvent, TME_LEAVE, TRACKMOUSEEVENT,
+        GetKeyState, ReleaseCapture, SetCapture, TrackMouseEvent, TME_LEAVE, TRACKMOUSEEVENT,
+        VK_CONTROL,
     };
     use windows::Win32::UI::WindowsAndMessaging::*;
 
@@ -477,6 +478,8 @@ mod imp {
     const WM_STOP: u32 = WM_APP + 3;
     const WM_MIC: u32 = WM_APP + 4;
     const WM_MOUSELEAVE: u32 = 0x02A3;
+    /// `wParam` flag of a mouse message: Ctrl was down.
+    const MK_CONTROL: usize = 0x0008;
 
     // Timers (control window).
     const T_POLL: usize = 1;
@@ -1263,6 +1266,77 @@ mod imp {
         }
     }
 
+    /// The browser's own grab and grabbing cursors (Chromium's `hand_grab.cur`
+    /// and `hand_grabbing.cur`, BSD licensed): the ones the pill's CSS
+    /// `cursor: grab` / `grabbing` show, so the button feels the same.
+    const GRAB_CUR: &[u8] = include_bytes!("../assets/hand_grab.cur");
+    const GRABBING_CUR: &[u8] = include_bytes!("../assets/hand_grabbing.cur");
+
+    thread_local! {
+        /// Open and closed hand, built once on first use (raw handles; 0 = failed).
+        static HANDS: Cell<Option<(isize, isize)>> = const { Cell::new(None) };
+    }
+
+    /// Reads the largest image of a `.cur` file and its hotspot, and makes a
+    /// cursor of it. `CreateIconFromResourceEx` wants the hotspot (two u16)
+    /// in front of the image data, as in a cursor resource.
+    fn cursor_from_cur(file: &[u8]) -> isize {
+        let u16_at = |o: usize| file.get(o..o + 2).map(|b| u16::from_le_bytes([b[0], b[1]]));
+        let u32_at = |o: usize| {
+            file.get(o..o + 4)
+                .map(|b| u32::from_le_bytes([b[0], b[1], b[2], b[3]]))
+        };
+        let count = u16_at(4).unwrap_or(0) as usize;
+        let best = (0..count)
+            .filter_map(|i| {
+                let e = 6 + 16 * i;
+                Some((
+                    u32_at(e + 8)?,
+                    u16_at(e + 4)?,
+                    u16_at(e + 6)?,
+                    u32_at(e + 12)?,
+                ))
+            })
+            .max_by_key(|&(size, ..)| size);
+        let Some((size, hx, hy, off)) = best else {
+            return 0;
+        };
+        let Some(image) = file.get(off as usize..(off + size) as usize) else {
+            return 0;
+        };
+        let mut data = Vec::with_capacity(image.len() + 4);
+        data.extend_from_slice(&hx.to_le_bytes());
+        data.extend_from_slice(&hy.to_le_bytes());
+        data.extend_from_slice(image);
+        // SAFETY: `data` is a complete cursor resource and outlives the call
+        // (the cursor copies it).
+        unsafe {
+            CreateIconFromResourceEx(&data, false, 0x0003_0000, 0, 0, LR_DEFAULTCOLOR)
+                .map(|i| i.0 as isize)
+                .unwrap_or(0)
+        }
+    }
+
+    /// The grab cursor (`closed`: the button is held), or the move cursor when
+    /// the hand could not be built.
+    fn grab_cursor(closed: bool) -> Option<HCURSOR> {
+        let (open, fist) = HANDS.with(|h| {
+            if h.get().is_none() {
+                h.set(Some((
+                    cursor_from_cur(GRAB_CUR),
+                    cursor_from_cur(GRABBING_CUR),
+                )));
+            }
+            h.get().unwrap_or((0, 0))
+        });
+        let raw = if closed { fist } else { open };
+        if raw != 0 {
+            return Some(HCURSOR(raw as *mut c_void));
+        }
+        // SAFETY: loading a stock cursor.
+        unsafe { LoadCursorW(None, IDC_SIZEALL).ok() }
+    }
+
     fn show_state(next: WidgetState) {
         let widget = L.with(|l| {
             l.shown.set(next);
@@ -1441,9 +1515,12 @@ mod imp {
                     LRESULT(0)
                 }
                 WM_LBUTTONDOWN => {
+                    // The button only moves when Ctrl is held at the press; a plain
+                    // press is always a click, however far the pointer travels.
+                    let ctrl = (wp.0 & MK_CONTROL) != 0;
                     L.with(|l| {
                         l.pressed.set(true);
-                        l.drag_armed.set(true);
+                        l.drag_armed.set(ctrl);
                         l.dragging.set(false);
                         l.drag_x.set(cursor().x);
                         l.drag_offset.set(l.placed.get().map_or(0, |p| p.x));
@@ -1481,6 +1558,19 @@ mod imp {
                     }
                     LRESULT(0)
                 }
+                WM_SETCURSOR => {
+                    // An open hand while Ctrl is held over the button (it can be grabbed),
+                    // a closed one from the press until the button is let go.
+                    let ctrl = GetKeyState(VK_CONTROL.0 as i32) < 0;
+                    let held = L.with(|l| l.pressed.get() && l.drag_armed.get());
+                    if held || ctrl {
+                        if let Some(c) = grab_cursor(held) {
+                            SetCursor(Some(c));
+                            return LRESULT(1);
+                        }
+                    }
+                    DefWindowProcW(h, msg, wp, lp)
+                }
                 WM_NCDESTROY => {
                     // Gone with the taskbar (Explorer exited) or destroyed by us.
                     L.with(|l| {
@@ -1493,6 +1583,18 @@ mod imp {
                 }
                 _ => DefWindowProcW(h, msg, wp, lp),
             }
+        }
+    }
+
+    #[cfg(test)]
+    mod tests {
+        use super::*;
+
+        #[test]
+        fn the_grab_cursors_load() {
+            assert_ne!(cursor_from_cur(GRAB_CUR), 0);
+            assert_ne!(cursor_from_cur(GRABBING_CUR), 0);
+            assert_eq!(cursor_from_cur(&[0, 0, 2, 0, 5, 0]), 0);
         }
     }
 }

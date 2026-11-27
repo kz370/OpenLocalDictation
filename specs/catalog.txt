@@ -17,7 +17,7 @@ lib.rs             :: hide_overlay_later, retract_live_typed, retract_in_backgro
 state.rs           :: AppState, AppPaths, ReviewPending — shared state (settings, models, stt, voice, hardware, downloads, dictation flags, live typer, review, target hwnd).
 errors.rs          :: AppError (+ code()), AppResult — wire form {code, detail}.
 settings.rs        :: Settings, SettingsStore{load,get,update}, read, write_device — settings.json with sanitize().
-models.rs          :: CATALOG, CatalogModel, RemoteFile, find — three Whisper models with pinned SHA-256.
+models.rs          :: CATALOG, CatalogModel, RemoteFile, find — four Whisper models (tiny, base, small, large-v3 turbo) with pinned SHA-256.
 models.rs          :: ModelStore{new,with_vad_dir,root,set_root,model_dir,installed_dir,is_installed,installed_ids,custom_models,resolve,install_bundled_vad,install} — folder handling, detection, consented download.
 models.rs          :: Resolved, CustomModel, ModelEntry, DownloadProgress — result and wire types.
 models.rs          :: is_whisper_folder, safe_join, extract_tar_bz2 — Whisper-folder test, path-traversal guard, bz2 extraction for the GPU pack.
@@ -49,7 +49,7 @@ typing.rs          :: insert_text, finalize_text, type_text, key_events::type_ch
 audio/mod.rs       :: level, spectrum, HighPassFilter, STT_SAMPLE_RATE — meter maths.
 audio/capture.rs   :: Capture{start,stop}, CaptureEvent — cpal microphone thread, retry on dead start, resample to 16 kHz.
 audio/devices.rs   :: list_inputs, input_device, AudioDevice, is_loopback_name — microphone discovery without loopback devices.
-stt/mod.rs         :: SttService{is_ready,with_recognizer,unload,loaded_model}, whisper_language, clean_transcript — loaded recognizer cache; language switched in place.
+stt/mod.rs         :: SttService{is_ready,with_recognizer,unload,loaded_model} (model chosen by Settings::effective_model: per-language, else the default), whisper_language, clean_transcript — loaded recognizer cache; language switched in place.
 stt/engine.rs      :: detect, create, set_language, Recognizer, EngineOptions, WhisperFiles — sherpa-onnx offline Whisper; raw C call for language switch.
 stt/session.rs     :: VoiceSessions{start,stop,is_active,is_transcribing,cancel_transcription}, VoiceEvent, SessionCtx, SilenceGuard — one listening session, VAD + worker transcription.
 commands.rs        :: 25 IPC commands (see api_reference.md).
@@ -64,7 +64,7 @@ strings.ts                     :: t (English text), errorMessage (code -> fix te
 settingsStore.ts               :: useSettings (zustand), applyTheme (system/light/dark following the OS).
 knownLanguages.ts              :: KNOWN_LANGUAGES — ~80 Whisper language codes (incl. Arabic, German) with English and native names.
 pages/Overlay.tsx              :: Overlay — states, live text, spectrum, target-app tab, language pill, review editor, drag, bubble style (mic circle, pill grows out of it on hover/use, neck), content-fit width; PillMenu, HeadBtn, useOverlayDrag, ResizeEdge, pillMinWidth.
-pages/Settings.tsx             :: SettingsPage — frameless title bar + four tabs; ModelCard (folder, models, downloads), ProcessingCard (CPU/GPU, CUDA), Dictation card, App card.
+pages/Settings.tsx             :: SettingsPage — frameless title bar + five tabs; ModelCard (folder, models, downloads), LanguageModelsTab (its own tab: a model per overlay language, bulk selection), ProcessingCard (CPU/GPU, CUDA), Dictation card, App card.
 components/SearchSelect.tsx    :: SearchSelect — compact dropdown, filter box when the list is longer than four.
 components/ShortcutInput.tsx   :: ShortcutInput, acceleratorFromEvent, prettyAccelerator — records a hotkey; Reset asks first.
 components/controls.tsx        :: Switch, Segmented, Dialog (themed modal), ErrorNotice, textDir.

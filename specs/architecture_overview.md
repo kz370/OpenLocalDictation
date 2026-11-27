@@ -1,7 +1,7 @@
 # Architecture Overview — Open Local Dictation v0.1.0
 
 Hold a hotkey, speak, and the text appears in the application you were using. A small, dictation-only
-Tauri 2 desktop app (Windows first). Speech recognition is Whisper (tiny, base, small) run locally with
+Tauri 2 desktop app (Windows first). Speech recognition is Whisper (tiny, base, small, large-v3 turbo; one model for all languages or one per language) run locally with
 sherpa-onnx. Nothing leaves the machine except the one-time model and CUDA-library downloads.
 
 ## 1. Goals and non-goals

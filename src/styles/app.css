@@ -1398,6 +1398,8 @@ html[data-route="settings"] body {
 .settings-main .card-body {
   min-height: 0;
   overflow-y: auto;
+  /* The scrollbar appearing (a dropdown opening below the last row) must not narrow the content and re-wrap the text. */
+  scrollbar-gutter: stable;
   border-radius: 0 0 15px 15px;
 }
 
@@ -1527,4 +1529,83 @@ html[data-route="settings"] body {
 .overlay-label.hint {
   font-weight: 500;
   color: var(--text-muted);
+}
+
+/* Language models tab */
+.lang-model-bar {
+  display: flex;
+  align-items: center;
+  gap: 10px 14px;
+  flex-wrap: wrap;
+  padding: 8px 12px;
+  margin-bottom: 8px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--surface-2);
+}
+
+.lang-model-search {
+  flex: 1 1 100%;
+  min-width: 0;
+}
+
+.lang-model-bulk-choices {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-inline-start: auto;
+}
+
+.lang-model-list {
+  margin: 0 0 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+}
+
+.lang-model-row {
+  display: grid;
+  grid-template-columns: minmax(110px, 170px) minmax(0, 1fr);
+  align-items: center;
+  gap: 12px;
+  padding: 6px 12px;
+}
+
+.lang-model-row + .lang-model-row {
+  border-top: 1px solid var(--border);
+}
+
+.lang-model-row.picked {
+  background: var(--surface-2);
+}
+
+.lang-model-row .ss {
+  max-width: none;
+  min-width: 0;
+}
+
+.lang-model-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.lang-model-radios {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end; /* the radio buttons sit against the row's right edge */
+  gap: 4px 16px;
+}
+
+.lang-radio {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 0;
+  font-size: var(--text-sm);
+  cursor: pointer;
+}
+
+.lang-radio input {
+  accent-color: var(--accent);
 }

@@ -36,6 +36,7 @@ stt::session::VoiceSessions::start | calls | audio::capture::Capture::start
 stt::session::VoiceSessions::start | depends_on | stt::SttService::is_ready
 stt::session::SessionCtx::warm_up | calls | stt::SttService::with_recognizer
 stt::session::SessionCtx::run | calls | stt::engine::Recognizer::transcribe
+stt::SttService::with_recognizer | calls | settings::Settings::effective_model
 stt::SttService::with_recognizer | calls | models::ModelStore::resolve
 stt::SttService::with_recognizer | calls | stt::engine::create
 stt::SttService::with_recognizer | calls | stt::engine::set_language

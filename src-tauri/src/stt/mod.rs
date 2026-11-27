@@ -48,7 +48,7 @@ impl SttService {
     }
 
     pub fn is_ready(&self, settings: &Settings) -> bool {
-        self.store.resolve(&settings.model).is_some()
+        self.store.resolve(settings.effective_model()).is_some()
     }
 
     pub fn loaded_model(&self) -> Option<String> {
@@ -72,7 +72,7 @@ impl SttService {
         settings: &Settings,
         f: impl FnOnce(&Recognizer) -> R,
     ) -> AppResult<R> {
-        let model = self.store.resolve(&settings.model).ok_or_else(|| {
+        let model = self.store.resolve(settings.effective_model()).ok_or_else(|| {
             AppError::Stt(
                 "no speech model is installed; open Settings and download Whisper tiny, base or small"
                     .into(),

@@ -3,6 +3,7 @@
 
 use crate::errors::{AppError, AppResult};
 use serde::{Deserialize, Serialize};
+use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 
@@ -17,6 +18,9 @@ pub const MINI_MAX_WIDTH: u32 = 800;
 pub struct Settings {
     /// "" = the best installed model, otherwise a catalog id or a custom model id.
     pub model: String,
+    /// Model per language code ("" or missing = use `model`). "auto" has no
+    /// entry of its own: the language is unknown until the take is decoded.
+    pub language_models: BTreeMap<String, String>,
     /// Folder the models are read from and downloaded to; "" = the app's own
     /// folder. Set only through `models_set_dir`, so it can be shared with other apps.
     pub models_dir: String,
@@ -84,6 +88,7 @@ impl Default for Settings {
     fn default() -> Self {
         Self {
             model: String::new(),
+            language_models: BTreeMap::new(),
             models_dir: String::new(),
             device: "gpu".into(),
             language: "auto".into(),
@@ -136,6 +141,16 @@ impl Settings {
         }
     }
 
+    /// The model id to use for the current language: its own choice when the
+    /// user made one, otherwise the model for all languages (`model`).
+    pub fn effective_model(&self) -> &str {
+        self.language_models
+            .get(self.language.trim())
+            .map(|m| m.as_str())
+            .filter(|m| !m.trim().is_empty())
+            .unwrap_or(&self.model)
+    }
+
     /// Clamps values into sane ranges; applied on every load and save.
     pub fn sanitize(&mut self) {
         self.device = pick(&self.device, &["gpu", "cpu"], "gpu");
@@ -145,6 +160,9 @@ impl Settings {
         if self.language.trim().is_empty() {
             self.language = "auto".into();
         }
+        self.language_models.retain(|lang, model| {
+            !lang.trim().is_empty() && lang != "auto" && !model.trim().is_empty()
+        });
         let mut seen = std::collections::HashSet::new();
         self.shown_languages
             .retain(|c| !c.trim().is_empty() && seen.insert(c.clone()));
@@ -244,6 +262,28 @@ mod tests {
         assert_eq!(s.device, "gpu");
         assert_eq!(s.silence_ms, 300);
         assert_eq!(s.language, "auto");
+    }
+
+    #[test]
+    fn model_follows_the_language_when_one_is_set() {
+        let mut s = Settings {
+            model: "whisper-base".into(),
+            language: "ar".into(),
+            ..Settings::default()
+        };
+        assert_eq!(s.effective_model(), "whisper-base");
+        s.language_models
+            .insert("ar".into(), "whisper-turbo".into());
+        s.language_models
+            .insert("auto".into(), "whisper-tiny".into());
+        s.language_models.insert("de".into(), " ".into());
+        s.sanitize();
+        assert_eq!(s.effective_model(), "whisper-turbo");
+        assert_eq!(s.language_models.len(), 1);
+        s.language = "en".into();
+        assert_eq!(s.effective_model(), "whisper-base");
+        s.language = "auto".into();
+        assert_eq!(s.effective_model(), "whisper-base");
     }
 
     #[test]

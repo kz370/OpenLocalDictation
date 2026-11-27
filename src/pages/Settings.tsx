@@ -128,6 +128,9 @@ function LanguageFilter({ shown, onChange }: { shown: string[]; onChange: (v: st
   );
 }
 
+/** The family name is already the section's, so the lists show only the size: "small", "large-v3 turbo". */
+const shortModel = (name: string) => name.replace(/^whisper[\s-]+/i, "");
+
 const percent = (done: number, total: number) => (total > 0 ? Math.min(100, Math.round((done / total) * 100)) : 0);
 
 /** The three Whisper models: pick one or download it. The app never deletes models. */
@@ -221,10 +224,10 @@ function ModelCard({ settings, update }: { settings: Settings; update: (m: (d: S
           const busy = m.downloading;
           return (
             <div key={m.id} className="model-item">
-              <input type="radio" name="model" aria-label={m.name} checked={active === m.id} disabled={!m.installed} onChange={() => update((d) => void (d.model = m.id))} />
+              <input type="radio" name="model" aria-label={shortModel(m.name)} checked={active === m.id} disabled={!m.installed} onChange={() => update((d) => void (d.model = m.id))} />
               <div style={{ minWidth: 0 }}>
                 <div className="row-label">
-                  {m.name} {m.id === recommended && !m.custom && <span className="badge accent">Recommended</span>}{m.custom && <span className="badge">Existing</span>}
+                  {shortModel(m.name)} {m.id === recommended && !m.custom && <span className="badge accent">Recommended</span>}{m.custom && <span className="badge">Existing</span>}
                 </div>
                 <span className="row-hint">
                   {m.custom ? m.path : `${m.blurb} · ${formatBytes(m.downloadBytes)}`}
@@ -280,6 +283,119 @@ function ModelCard({ settings, update }: { settings: Settings; update: (m: (d: S
           </p>
         </Dialog>
       )}
+    </Card>
+  );
+}
+
+const langLabel = (code: string) => {
+  const l = KNOWN_LANGUAGES.find((k) => k.code === code);
+  return l ? (l.name === l.native ? l.name : `${l.name} · ${l.native}`) : code;
+};
+
+/**
+ * Its own tab: a model per language. Lists the languages chosen for the overlay
+ * menu (Dictation tab), or every language when that menu shows all of them.
+ * Several rows can be ticked and given the same model at once. Changes save
+ * like every other setting.
+ */
+function LanguageModelsTab({ settings, update }: { settings: Settings; update: (m: (d: Settings) => void) => void }) {
+  const [models, setModels] = useState<ModelEntry[]>([]);
+  const [picked, setPicked] = useState<string[]>([]);
+  const [query, setQuery] = useState("");
+
+  useEffect(() => {
+    const refresh = () => void ipc.modelsList().then(setModels).catch(() => undefined);
+    refresh();
+    const sub = on("models://changed", refresh);
+    return () => void sub.then((u) => u());
+  }, []);
+
+  const installed = models.filter((m) => m.installed);
+  // Same rule as the backend (and the Speech model tab) for the model used for all languages.
+  const downloaded = installed.filter((m) => !m.custom);
+  const fallbackId = installed.find((m) => m.id === settings.model)?.id ?? downloaded[downloaded.length - 1]?.id ?? installed[0]?.id;
+  const defaultName = shortModel(installed.find((m) => m.id === fallbackId)?.name ?? "none installed");
+  const modelName = (id: string) => shortModel(installed.find((m) => m.id === id)?.name ?? id);
+  const modelOptions: SearchOption[] = installed.map((m) => ({ value: m.id, label: shortModel(m.name) }));
+  const withDefault: SearchOption[] = [{ value: "", label: `Default (${defaultName})` }, ...modelOptions];
+
+  const map = settings.languageModels ?? {};
+  const chosen = settings.shownLanguages.length > 0;
+  const total = chosen ? new Set([...settings.shownLanguages, ...Object.keys(map)]).size : KNOWN_LANGUAGES.length;
+  // Chosen overlay languages (plus any that already have a model), or all languages.
+  const listed = (chosen ? [...settings.shownLanguages, ...Object.keys(map).filter((c) => !settings.shownLanguages.includes(c))] : KNOWN_LANGUAGES.map((l) => l.code)).filter((c) => {
+    const q = total > 5 ? query.trim().toLowerCase() : "";
+    return !q || `${langLabel(c)} ${c}`.toLowerCase().includes(q);
+  });
+  const searchable = total > 5;
+  const allPicked = listed.length > 0 && listed.every((c) => picked.includes(c));
+  const toggle = (code: string) => setPicked((p) => (p.includes(code) ? p.filter((c) => c !== code) : [...p, code]));
+  const setMany = (list: string[], id: string) =>
+    update((d) => {
+      const next = { ...(d.languageModels ?? {}) };
+      for (const c of list) {
+        if (id) next[c] = id;
+        else delete next[c];
+      }
+      d.languageModels = next;
+    });
+  const overridden = Object.keys(map).length;
+
+  return (
+    <Card
+      title="Model per language"
+      icon={<Languages size={16} />}
+      actions={
+        <button className="btn btn-sm" disabled={overridden === 0} onClick={() => update((d) => void (d.languageModels = {}))}>
+          <RotateCcw size={13} /> Same model for all
+        </button>
+      }
+    >
+      <p className="row-hint" style={{ margin: "10px 0 2px" }}>
+        A bigger model transcribes hard languages (Arabic, Hindi, Thai…) far better; a small, fast one is fine for easy languages.
+      </p>
+      <p className="row-hint" style={{ margin: "0 0 10px" }}>
+        {chosen ? "Listed: the languages chosen for the overlay menu (Dictation tab)." : "Listed: all languages. Choose a few for the overlay menu in the Dictation tab to shorten the list."} Automatic detection uses the default model.
+      </p>
+      {installed.length === 0 && <div className="notice warn" style={{ margin: "8px 0" }}>No model is installed yet. Download one in the Speech model tab first.</div>}
+      <div className="lang-model-bar">
+        {searchable && <input className="input lang-model-search" placeholder={`Search ${total} languages…`} aria-label="Search languages" value={query} onChange={(e) => setQuery(e.target.value)} />}
+        <label className="lang-pick-item">
+          <input type="checkbox" checked={allPicked} disabled={listed.length === 0} onChange={() => setPicked(allPicked ? picked.filter((c) => !listed.includes(c)) : [...new Set([...picked, ...listed])])} />
+          {picked.length > 0 ? `${picked.length} selected` : "Select all"}
+        </label>
+        <div className="lang-model-bulk-choices">
+          <span className="row-hint">{picked.length > 0 ? `Set ${picked.length} selected to` : "Tick languages to set them together"}</span>
+          {picked.length > 0 && (
+            <div className="segmented" role="group" aria-label="Model for the selected languages">
+              {withDefault.map((o) => (
+                <button key={o.value} type="button" onClick={() => setMany(picked, o.value)}>
+                  {o.value === "" ? "Default" : o.label}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+      <div className="lang-model-list">
+        {listed.map((code) => (
+          <div key={code} className={`lang-model-row${picked.includes(code) ? " picked" : ""}`}>
+            <label className="lang-pick-item">
+              <input type="checkbox" checked={picked.includes(code)} onChange={() => toggle(code)} />
+              <span className="lang-model-name">{langLabel(code)}</span>
+            </label>
+            <div className="lang-model-radios" role="radiogroup" aria-label={`Model for ${langLabel(code)}`}>
+              {[...withDefault, ...(map[code] && !modelOptions.some((o) => o.value === map[code]) ? [{ value: map[code], label: `${modelName(map[code])} (not installed)` }] : [])].map((o) => (
+                <label key={o.value} className="lang-radio">
+                  <input type="radio" name={`lm-${code}`} checked={(map[code] ?? "") === o.value} onChange={() => setMany([code], o.value)} />
+                  {o.value === "" ? "Default" : o.label}
+                </label>
+              ))}
+            </div>
+          </div>
+        ))}
+        {listed.length === 0 && <p className="row-hint" style={{ padding: 12, margin: 0 }}>No language matches.</p>}
+      </div>
     </Card>
   );
 }
@@ -379,9 +495,10 @@ function ProcessingCard({ settings }: { settings: Settings }) {
   );
 }
 
-type Tab = "model" | "processing" | "dictation" | "overlay" | "app";
+type Tab = "model" | "languages" | "processing" | "dictation" | "overlay" | "app";
 const TABS: { id: Tab; label: string; icon: ReactNode }[] = [
   { id: "model", label: "Speech model", icon: <Brain size={15} /> },
+  { id: "languages", label: "Language models", icon: <Languages size={15} /> },
   { id: "processing", label: "Processing", icon: <Cpu size={15} /> },
   { id: "dictation", label: "Dictation", icon: <Mic size={15} /> },
   { id: "overlay", label: "Overlay", icon: <PictureInPicture2 size={15} /> },
@@ -469,6 +586,7 @@ export function SettingsPage() {
 
         <div role="tabpanel" id={`panel-${tab}`} aria-labelledby={`tab-${tab}`}>
         {tab === "model" && <ModelCard settings={settings} update={set} />}
+        {tab === "languages" && <LanguageModelsTab settings={settings} update={set} />}
         {tab === "processing" && <ProcessingCard settings={settings} />}
 
         {tab === "dictation" && (
@@ -530,7 +648,7 @@ export function SettingsPage() {
 
         {tab === "overlay" && (
         <Card title="Overlay" icon={<PictureInPicture2 size={16} />}>
-          <Row label="Mic button in the taskbar" icon={<PanelBottom size={16} />} hint="Click to dictate, point at it to open the pill. Drag it to move it along the taskbar. Needs a taskbar at the bottom of the screen." htmlFor="sw-taskbar">
+          <Row label="Mic button in the taskbar" icon={<PanelBottom size={16} />} hint="Click to dictate, point at it to open the pill. Hold Ctrl and drag it to move it along the taskbar. Needs a taskbar at the bottom of the screen." htmlFor="sw-taskbar">
             <Switch id="sw-taskbar" label="Mic button in the taskbar" checked={settings.taskbarWidget} onChange={(v) => set((d) => void (d.taskbarWidget = v))} />
           </Row>
           {settings.taskbarWidget && (
