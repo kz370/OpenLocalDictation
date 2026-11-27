@@ -485,7 +485,6 @@ html[data-route="settings"] body {
   white-space: nowrap;
 }
 
-.row-control .ss,
 .row-control .select {
   width: 320px;
   max-width: 100%;
@@ -568,8 +567,9 @@ html[data-route="settings"] body {
 /* Compact searchable dropdown. */
 .ss {
   position: relative;
-  width: 100%;
-  max-width: 340px;
+  /* As wide as the longest option (see .ss-size), up to a cap. */
+  width: fit-content;
+  max-width: min(340px, 100%);
 }
 
 .ss-button {
@@ -582,9 +582,27 @@ html[data-route="settings"] body {
 }
 
 .ss-current {
+  display: grid;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.ss-current > * {
+  grid-area: 1 / 1;
+  min-width: 0;
+  white-space: nowrap;
+}
+
+.ss-text {
   overflow: hidden;
   text-overflow: ellipsis;
-  white-space: nowrap;
+}
+
+/* Invisible copy of an option's label that only sets the button's width. */
+.ss-size {
+  visibility: hidden;
+  height: 0;
+  overflow: hidden;
 }
 
 .ss-menu {
@@ -916,15 +934,15 @@ html[data-route="settings"] body {
 
 
 .lang-model-bulk-select {
-  flex: 1 1 220px;
+  flex: 0 1 auto;
   min-width: 0;
-  max-width: 300px;
+  max-width: 100%;
   margin-inline-start: auto;
 }
 
 .lang-model-bulk-select .ss,
 .lang-model-row .ss {
-  max-width: none;
+  max-width: 100%;
   min-width: 0;
 }
 

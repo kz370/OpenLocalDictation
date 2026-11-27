@@ -95,7 +95,11 @@ export function SearchSelect(props: { value: string; options: SearchOption[]; on
   return (
     <div className="ss" ref={root}>
       <button type="button" className="input ss-button" aria-label={props.label} aria-haspopup="listbox" aria-expanded={open} onClick={() => setOpen((o) => !o)}>
-        <span className="ss-current">{current?.label ?? props.value}</span>
+        <span className="ss-current">
+          <span className="ss-text">{current?.label ?? props.value}</span>
+          {/* Every option, invisible and stacked in the same cell: the button is as wide as the longest one, whichever is picked. */}
+          {props.options.map((o) => (<span key={o.value} className="ss-size" aria-hidden>{o.label}</span>))}
+        </span>
         <ChevronDown size={14} aria-hidden />
       </button>
       {open && (
