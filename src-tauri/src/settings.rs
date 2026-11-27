@@ -21,6 +21,15 @@ pub struct Settings {
     /// Model per language code ("" or missing = use `model`). "auto" has no
     /// entry of its own: the language is unknown until the take is decoded.
     pub language_models: BTreeMap<String, String>,
+    /// Model ids loaded into memory when the app starts. `None` = never
+    /// chosen: the default model and the one for the dictation language.
+    pub auto_load_models: Option<Vec<String>>,
+    /// Model ids the user hid from the lists in Settings (they stay installed
+    /// and keep working where they are in use; only the list changes).
+    pub hidden_models: Vec<String>,
+    /// Folders of models the user added with "Add your own model" (linked in
+    /// place, never copied or deleted). Set only through `models_add_own`.
+    pub user_models: Vec<String>,
     /// Folder the models are read from and downloaded to; "" = the app's own
     /// folder. Set only through `models_set_dir`, so it can be shared with other apps.
     pub models_dir: String,
@@ -89,6 +98,9 @@ impl Default for Settings {
         Self {
             model: String::new(),
             language_models: BTreeMap::new(),
+            user_models: Vec::new(),
+            hidden_models: Vec::new(),
+            auto_load_models: None,
             models_dir: String::new(),
             device: "gpu".into(),
             language: "auto".into(),
@@ -163,6 +175,16 @@ impl Settings {
         self.language_models.retain(|lang, model| {
             !lang.trim().is_empty() && lang != "auto" && !model.trim().is_empty()
         });
+        if let Some(list) = self.auto_load_models.as_mut() {
+            let mut once = std::collections::HashSet::new();
+            list.retain(|id| !id.trim().is_empty() && once.insert(id.clone()));
+        }
+        let mut hidden = std::collections::HashSet::new();
+        self.hidden_models
+            .retain(|id| !id.trim().is_empty() && hidden.insert(id.clone()));
+        let mut own = std::collections::HashSet::new();
+        self.user_models
+            .retain(|d| !d.trim().is_empty() && own.insert(d.clone()));
         let mut seen = std::collections::HashSet::new();
         self.shown_languages
             .retain(|c| !c.trim().is_empty() && seen.insert(c.clone()));

@@ -1531,6 +1531,27 @@ html[data-route="settings"] body {
   color: var(--text-muted);
 }
 
+/* Load / Unload / Auto-load next to a model */
+.model-actions {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.model-actions .btn {
+  min-width: 96px; /* Load and Unload are the same width, so the buttons line up row after row */
+  justify-content: center;
+}
+
+.auto-load {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: var(--text-sm);
+  color: var(--text-muted);
+  cursor: pointer;
+}
+
 /* Language models tab */
 .lang-model-bar {
   display: flex;
@@ -1608,4 +1629,45 @@ html[data-route="settings"] body {
 
 .lang-radio input {
   accent-color: var(--accent);
+}
+
+.lang-model-bulk-select {
+  flex: 1 1 220px;
+  min-width: 0;
+  margin-inline-start: auto;
+  max-width: 300px;
+}
+
+.lang-model-bulk-select .ss {
+  max-width: none;
+}
+
+/* Hidden models, collapsed under the list */
+.hidden-models {
+  margin: 4px 0 12px;
+}
+
+.hidden-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 4px;
+  border: 0;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+  cursor: pointer;
+}
+
+.hidden-toggle:hover {
+  color: var(--text);
+}
+
+.hidden-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 6px 4px 6px 22px;
+  border-top: 1px solid var(--border);
 }

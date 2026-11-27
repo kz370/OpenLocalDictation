@@ -53,6 +53,14 @@ gpu::install | calls | models::extract_tar_bz2
 gpu::activate | depends_on | gpu::attempt_file
 commands::save_settings | calls | shortcuts::register_all
 commands::save_settings | calls | autostart::set_enabled
+commands::stt_loaded | calls | stt::SttService::loaded_models
+commands::stt_load | calls | stt::SttService::load_model
+commands::stt_unload | calls | stt::SttService::unload_model
+commands::models_add_own | calls | stt::engine::detect
+commands::models_add_own | calls | models::ModelStore::set_user_dirs
+lib::preload_models | calls | stt::SttService::preload
+commands::save_settings | calls | lib::preload_models
+stt::SttService::with_model | calls | stt::engine::ModelFiles::cpu_only
 commands::save_settings | calls | stt::SttService::unload
 commands::models_download | calls | models::ModelStore::install
 commands::models_set_dir | calls | models::ModelStore::set_root

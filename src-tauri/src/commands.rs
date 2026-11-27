@@ -37,7 +37,10 @@ pub fn save_settings(
         let orb_shift = s.overlay_orb_shift;
         // The taskbar button's position is set by dragging it, like the overlay's.
         let widget_x = s.taskbar_widget_x;
+        // Own models are added by their command, like the folder.
+        let own_models = s.user_models.clone();
         *s = settings;
+        s.user_models = own_models;
         s.taskbar_widget_x = widget_x;
         s.models_dir = dir;
         s.overlay_x = x;
@@ -47,8 +50,16 @@ pub fn save_settings(
         s.overlay_mini_width = mini_w;
         s.overlay_orb_shift = orb_shift;
     })?;
-    if saved.model != before.model || saved.device != before.device {
+    if saved.device != before.device {
         state.stt.unload();
+    }
+    if saved.device != before.device
+        || saved.model != before.model
+        || saved.language != before.language
+        || saved.language_models != before.language_models
+        || saved.auto_load_models != before.auto_load_models
+    {
+        crate::preload_models(&app);
     }
     if saved.shortcut != before.shortcut {
         shortcuts::register_all(&app);
@@ -158,6 +169,36 @@ pub async fn audio_inputs() -> CmdResult<Vec<AudioDevice>> {
 // Speech models
 // ---------------------------------------------------------------------------
 
+/// The speech models that are in memory, and whether each runs on the GPU or
+/// the CPU. Empty until start-up preloading or the first take has loaded one.
+#[tauri::command]
+pub fn stt_loaded(state: State<'_, AppState>) -> Vec<crate::stt::LoadedModel> {
+    state.stt.loaded_models()
+}
+
+/// Loads a model into memory on request (the Load button). Takes seconds for
+/// a big one, so it runs off the UI thread; resolves when it is loaded.
+#[tauri::command]
+pub async fn stt_load(app: AppHandle, id: String) -> CmdResult<()> {
+    let worker = app.clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        let state = worker.state::<AppState>();
+        state.stt.load_model(&state.settings.get(), &id)
+    })
+    .await
+    .map_err(|e| AppError::Other(e.to_string()))??;
+    let _ = app.emit("models://changed", ());
+    Ok(())
+}
+
+/// Frees a loaded model's memory. Nothing on disk is touched; the model loads
+/// again when a take needs it.
+#[tauri::command]
+pub fn stt_unload(app: AppHandle, state: State<'_, AppState>, id: String) {
+    state.stt.unload_model(&id);
+    let _ = app.emit("models://changed", ());
+}
+
 #[tauri::command]
 pub fn models_list(state: State<'_, AppState>) -> Vec<ModelEntry> {
     let downloading = state.downloads.lock().unwrap_or_else(|p| p.into_inner());
@@ -172,6 +213,7 @@ pub fn models_list(state: State<'_, AppState>) -> Vec<ModelEntry> {
             downloading: downloading.contains_key(m.id),
             custom: false,
             path: None,
+            kind: "Whisper".into(),
         })
         .collect();
     // Whisper models already in the folder (put there by the user or another app).
@@ -183,15 +225,78 @@ pub fn models_list(state: State<'_, AppState>) -> Vec<ModelEntry> {
             .map(|c| ModelEntry {
                 id: c.id,
                 name: c.name,
-                blurb: "Found in the models folder".into(),
+                blurb: if c.added {
+                    "Added by you".into()
+                } else {
+                    "Found in the models folder".into()
+                },
                 download_bytes: 0,
                 installed: true,
                 downloading: false,
                 custom: true,
                 path: Some(c.dir.to_string_lossy().to_string()),
+                kind: c.kind.into(),
             }),
     );
     list
+}
+
+/// Adds a model folder the user picked: it is linked where it is (never copied
+/// or deleted) and listed with the others. The folder must be a sherpa-onnx
+/// offline model the app can run (Whisper, Moonshine, transducer, or a
+/// single-file CTC / SenseVoice / Paraformer / Dolphin / Omnilingual model).
+#[tauri::command]
+pub fn models_add_own(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    dir: String,
+) -> CmdResult<ModelEntry> {
+    let path = std::path::PathBuf::from(dir.trim());
+    if !path.is_absolute() || !path.is_dir() {
+        return Err(AppError::Invalid(format!(
+            "\"{}\" is not an existing folder; pick the model's folder with the folder picker",
+            dir.trim()
+        )));
+    }
+    if crate::stt::engine::detect(&path).is_none() {
+        return Err(AppError::Invalid(format!(
+            "\"{}\" is not a model this app can run. Pick the folder you unpacked from a sherpa-onnx model download: it needs a tokens.txt and the model's .onnx / .ort files (Whisper, Moonshine, transducer, or a single-file model whose folder name says what it is, like sherpa-onnx-dolphin-...)",
+            path.display()
+        )));
+    }
+    let text = path.to_string_lossy().to_string();
+    let saved = state.settings.update(|s| {
+        if !s.user_models.contains(&text) {
+            s.user_models.push(text.clone());
+        }
+    })?;
+    state.models.set_user_dirs(
+        saved
+            .user_models
+            .iter()
+            .map(std::path::PathBuf::from)
+            .collect(),
+    );
+    let _ = app.emit("models://changed", ());
+    let _ = app.emit("settings://changed", &saved);
+    let id = format!("custom:{}", path.display());
+    state
+        .models
+        .custom_models()
+        .into_iter()
+        .find(|c| c.id == id)
+        .map(|c| ModelEntry {
+            id: c.id,
+            name: c.name,
+            blurb: "Added by you".into(),
+            download_bytes: 0,
+            installed: true,
+            downloading: false,
+            custom: true,
+            path: Some(c.dir.to_string_lossy().to_string()),
+            kind: c.kind.into(),
+        })
+        .ok_or_else(|| AppError::Invalid("the model could not be added".into()))
 }
 
 /// Points the app at a folder that already holds Whisper models (shared with
@@ -241,6 +346,7 @@ pub fn models_set_dir(
     })?;
     let _ = app.emit("models://changed", ());
     let _ = app.emit("settings://changed", &saved);
+    crate::preload_models(&app);
     Ok(target.to_string_lossy().to_string())
 }
 
@@ -479,6 +585,7 @@ pub fn dictation_set_language(
 ) -> CmdResult<()> {
     let saved = state.settings.update(|s| s.language = language)?;
     let _ = app.emit("settings://changed", &saved);
+    crate::preload_models(&app);
     Ok(())
 }
 

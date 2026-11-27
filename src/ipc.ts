@@ -2,7 +2,7 @@
 
 import { invoke } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
-import type { AppErrorPayload, AppInfo, AudioDevice, GpuStatus, ModelEntry, Settings, TaskbarStatus } from "./types";
+import type { AppErrorPayload, AppInfo, AudioDevice, GpuStatus, LoadedModel, ModelEntry, Settings, TaskbarStatus } from "./types";
 
 export function isAppError(e: unknown): e is AppErrorPayload {
   return typeof e === "object" && e !== null && "code" in e && "detail" in e;
@@ -22,6 +22,10 @@ export const ipc = {
   openLogs: () => invoke<void>("open_logs"),
   audioInputs: () => invoke<AudioDevice[]>("audio_inputs"),
 
+  sttLoaded: () => invoke<LoadedModel[]>("stt_loaded"),
+  sttLoad: (id: string) => invoke<void>("stt_load", { id }),
+  sttUnload: (id: string) => invoke<void>("stt_unload", { id }),
+  modelsAddOwn: (dir: string) => invoke<ModelEntry>("models_add_own", { dir }),
   modelsList: () => invoke<ModelEntry[]>("models_list"),
   modelsDownload: (ids: string[]) => invoke<void>("models_download", { ids }),
   modelsCancel: (id: string) => invoke<void>("models_cancel", { id }),

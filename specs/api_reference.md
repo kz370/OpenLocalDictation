@@ -23,6 +23,10 @@ There are **28 commands**.
 ### Speech models
 | Command | Args | Returns | Notes |
 |---|---|---|---|
+| `stt_loaded` | — | `LoadedModel[]` | The speech models in memory (`kind`, `device` "gpu"/"cpu", `gpuBlocked` when the GPU is on but the model's `.ort` format cannot use it, `language` "" = detects). Empty until start-up preloading or a take has loaded one. Polled by Settings every 1.5 s. |
+| `stt_load` | `id` | `()` | Loads one model into memory now (Settings > Load, after a confirmation dialog); resolves when loaded, emits `models://changed`. |
+| `stt_unload` | `id` | `()` | Frees a loaded model's memory (Settings > Unload, after a confirmation dialog). Files are never touched. |
+| `models_add_own` | `dir` | `ModelEntry` | Adds a model folder the user picked ("Add your own model"): validated with `engine::detect`, stored in `Settings.userModels`, linked in place (never copied or deleted). Error `invalid` with the reason when the folder is not a supported model. |
 | `models_list` | — | `ModelEntry[]` | The three catalog models, then every Whisper folder found in the models folder (`custom: true`, id `custom:<path>`). |
 | `models_download` | `ids: string[]` | `()` | Queues catalog models; progress on `models://download`. Only called after the user pressed Download. |
 | `models_cancel` | `id: string` | `()` | |

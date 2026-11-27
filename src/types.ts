@@ -7,6 +7,12 @@ export interface Settings {
   model: string;
   /** Model per language code; a language without an entry uses `model`. */
   languageModels: Record<string, string>;
+  /** Folders of models the user added by hand (set by `modelsAddOwn`). */
+  userModels: string[];
+  /** Model ids hidden from the lists in Settings. */
+  hiddenModels: string[];
+  /** Model ids loaded when the app starts; null = never chosen (the default model and the one for the dictation language). */
+  autoLoadModels: string[] | null;
   modelsDir: string;
   device: "gpu" | "cpu";
   language: string;
@@ -83,6 +89,21 @@ export interface ModelEntry {
   downloading: boolean;
   custom: boolean;
   path: string | null;
+  /** Model family: "Whisper", "Moonshine", ... */
+  kind: string;
+}
+
+/** The speech model in memory and where it runs. */
+export interface LoadedModel {
+  id: string;
+  name: string;
+  /** Model family: "Whisper", "Moonshine", ... */
+  kind: string;
+  device: "gpu" | "cpu";
+  /** The GPU is on but this model's format cannot use it. */
+  gpuBlocked: boolean;
+  /** Language it decodes; "" = it detects the language. */
+  language: string;
 }
 
 export interface DownloadProgress {

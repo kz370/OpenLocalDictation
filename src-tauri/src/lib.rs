@@ -132,6 +132,17 @@ fn taskbar_click(app: &AppHandle) {
     }
 }
 
+/// Loads the speech models for the current language and the default one on a
+/// background thread, so the first dictation does not wait for them.
+pub fn preload_models(app: &AppHandle) {
+    let app = app.clone();
+    std::thread::spawn(move || {
+        let state = app.state::<AppState>();
+        state.stt.preload(&state.settings.get());
+        let _ = app.emit("models://changed", ());
+    });
+}
+
 fn init_state(app: &AppHandle) -> Result<AppState, Box<dyn std::error::Error>> {
     let data_dir = app.path().app_data_dir()?;
     let paths = AppPaths {
@@ -161,6 +172,14 @@ fn init_state(app: &AppHandle) -> Result<AppState, Box<dyn std::error::Error>> {
         models_root,
         own_models.join("vad"),
     ));
+    models.set_user_dirs(
+        settings
+            .get()
+            .user_models
+            .iter()
+            .map(std::path::PathBuf::from)
+            .collect(),
+    );
     let vad_path = models.install_bundled_vad()?;
     let stt = Arc::new(SttService::new(models.clone(), hardware.clone()));
     let handle = app.clone();
@@ -464,6 +483,7 @@ pub fn run() {
             // Pre-create settings hidden: on-demand creation flakes on some
             // machines while startup-created webviews always work.
             let _ = window::ensure_settings(&handle);
+            preload_models(&handle);
             // Nothing to listen with yet: open the settings so a model can be chosen.
             if !ready {
                 let _ = window::open_settings(&handle);
@@ -479,6 +499,10 @@ pub fn run() {
             commands::open_logs,
             commands::audio_inputs,
             commands::models_list,
+            commands::stt_loaded,
+            commands::stt_load,
+            commands::stt_unload,
+            commands::models_add_own,
             commands::models_download,
             commands::models_cancel,
             commands::models_set_dir,

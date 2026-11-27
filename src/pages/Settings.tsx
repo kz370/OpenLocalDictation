@@ -3,11 +3,15 @@ import { open as pickFolder } from "@tauri-apps/plugin-dialog";
 import {
   Brain,
   Check,
+  ChevronDown,
+  ChevronRight,
   CircleDot,
   ClipboardPaste,
   Cpu,
   Download,
   Droplets,
+  Eye,
+  EyeOff,
   FileText,
   FolderOpen,
   Keyboard,
@@ -26,6 +30,7 @@ import {
   PanelBottom,
   Palette,
   Pencil,
+  Plus,
   PenLine,
   PictureInPicture2,
   Pin,
@@ -44,7 +49,7 @@ import { ipc, on, toAppError } from "../ipc";
 import { KNOWN_LANGUAGES } from "../knownLanguages";
 import { useSettings } from "../settingsStore";
 import { formatBytes } from "../strings";
-import type { AppErrorPayload, AppInfo, AudioDevice, DownloadProgress, GpuProgress, GpuStatus, ModelEntry, Settings, TaskbarStatus } from "../types";
+import type { AppErrorPayload, AppInfo, AudioDevice, DownloadProgress, GpuProgress, GpuStatus, LoadedModel, ModelEntry, Settings, TaskbarStatus } from "../types";
 import { Dialog, ErrorNotice, Segmented, Switch } from "../components/controls";
 import { Card, Row } from "../components/layout";
 import { SearchSelect, type SearchOption } from "../components/SearchSelect";
@@ -129,7 +134,22 @@ function LanguageFilter({ shown, onChange }: { shown: string[]; onChange: (v: st
 }
 
 /** The family name is already the section's, so the lists show only the size: "small", "large-v3 turbo". */
-const shortModel = (name: string) => name.replace(/^whisper[\s-]+/i, "");
+const shortModel = (name: string | undefined) => (name ?? "").replace(/^whisper[\s-]+/i, "");
+
+/** The models in memory now (they load at start-up and at takes, so the list changes while dictating); polled while the tab is open. */
+function useLoadedModels(): [LoadedModel[], () => void] {
+  const [loaded, setLoaded] = useState<LoadedModel[]>([]);
+  const poll = useCallback(() => void ipc.sttLoaded().then((l) => setLoaded(Array.isArray(l) ? l : [])).catch(() => undefined), []);
+  useEffect(() => {
+    poll();
+    const t = window.setInterval(poll, 1500);
+    return () => window.clearInterval(t);
+  }, [poll]);
+  return [loaded, poll];
+}
+
+/** "GPU" or "CPU" badge for the loaded model. */
+const deviceLabel = (m: LoadedModel) => (m.device === "gpu" ? "GPU (CUDA)" : m.gpuBlocked ? "CPU only" : "CPU");
 
 const percent = (done: number, total: number) => (total > 0 ? Math.min(100, Math.round((done / total) * 100)) : 0);
 
@@ -140,6 +160,7 @@ function ModelCard({ settings, update }: { settings: Settings; update: (m: (d: S
   const [error, setError] = useState<AppErrorPayload | null>(null);
   const [confirmDefault, setConfirmDefault] = useState(false);
   const [info, setInfo] = useState<AppInfo | null>(null);
+  const [loaded, pollLoaded] = useLoadedModels();
   const hasNvidia = info?.hasNvidia ?? false;
 
   const refresh = useCallback(() => {
@@ -182,6 +203,44 @@ function ModelCard({ settings, update }: { settings: Settings; update: (m: (d: S
       setError(toAppError(e));
     }
   };
+  const [loadingId, setLoadingId] = useState<string | null>(null);
+  const [confirm, setConfirm] = useState<{ action: "load" | "unload"; id: string; name: string } | null>(null);
+  const [showHidden, setShowHidden] = useState(false);
+  const hiddenIds = settings.hiddenModels ?? [];
+  const shownModels = models.filter((m) => !hiddenIds.includes(m.id));
+  const hiddenModels = models.filter((m) => hiddenIds.includes(m.id));
+  const setHidden = (id: string, hide: boolean) => update((d) => void (d.hiddenModels = hide ? [...new Set([...(d.hiddenModels ?? []), id])] : (d.hiddenModels ?? []).filter((x) => x !== id)));
+  // Same rule as the backend when the user never chose: the default model and the one for the dictation language.
+  const languageModelId = installed.find((m) => m.id === settings.languageModels?.[settings.language])?.id;
+  const autoIds: string[] = settings.autoLoadModels ?? [...new Set([active, languageModelId].filter((x): x is string => !!x))];
+  const setAuto = (id: string, on: boolean) => update((d) => void (d.autoLoadModels = on ? [...new Set([...autoIds, id])] : autoIds.filter((x) => x !== id)));
+  const load = async (id: string) => {
+    setError(null);
+    setLoadingId(id);
+    try {
+      await ipc.sttLoad(id);
+    } catch (e) {
+      setError(toAppError(e));
+    } finally {
+      setLoadingId(null);
+      pollLoaded();
+    }
+  };
+  const unload = async (id: string) => {
+    await ipc.sttUnload(id);
+    pollLoaded();
+  };
+  const addOwn = async () => {
+    setError(null);
+    const picked = await pickFolder({ directory: true, multiple: false, title: "Folder of the model you want to add (unpacked from a sherpa-onnx download)" });
+    if (typeof picked !== "string") return;
+    try {
+      await ipc.modelsAddOwn(picked);
+      refresh();
+    } catch (e) {
+      setError(toAppError(e));
+    }
+  };
   const chooseFolder = async () => {
     const picked = await pickFolder({ directory: true, multiple: false, defaultPath: info?.modelsDir, title: "Folder that holds your Whisper models" });
     if (typeof picked === "string") await changeFolder(picked);
@@ -219,7 +278,7 @@ function ModelCard({ settings, update }: { settings: Settings; update: (m: (d: S
         </div>
       )}
       <div className="model-list">
-        {models.map((m) => {
+        {shownModels.map((m) => {
           const p = progress[m.id];
           const busy = m.downloading;
           return (
@@ -227,7 +286,7 @@ function ModelCard({ settings, update }: { settings: Settings; update: (m: (d: S
               <input type="radio" name="model" aria-label={shortModel(m.name)} checked={active === m.id} disabled={!m.installed} onChange={() => update((d) => void (d.model = m.id))} />
               <div style={{ minWidth: 0 }}>
                 <div className="row-label">
-                  {shortModel(m.name)} {m.id === recommended && !m.custom && <span className="badge accent">Recommended</span>}{m.custom && <span className="badge">Existing</span>}
+                  {shortModel(m.name)} {m.id === recommended && !m.custom && <span className="badge accent">Recommended</span>}{m.custom && <span className="badge">{m.blurb === "Added by you" ? "Yours" : "Existing"} · {m.kind}</span>} {(() => { const l = loaded.find((x) => x.id === m.id); return l ? <span className="badge accent" title={l.gpuBlocked ? "The GPU is on, but this model's file format (.ort) cannot run on it." : undefined}>Loaded · {deviceLabel(l)}</span> : null; })()}
                 </div>
                 <span className="row-hint">
                   {m.custom ? m.path : `${m.blurb} · ${formatBytes(m.downloadBytes)}`}
@@ -241,22 +300,112 @@ function ModelCard({ settings, update }: { settings: Settings; update: (m: (d: S
                   </div>
                 )}
               </div>
-              {m.installed ? (
-                <span />
-              ) : busy ? (
-                <button className="btn btn-sm" onClick={() => void ipc.modelsCancel(m.id)}>
-                  <X size={13} /> Cancel
+              <div className="model-actions">
+                <button
+                  className="icon-btn"
+                  aria-label={`Hide ${shortModel(m.name)} from the list`}
+                  disabled={active === m.id || busy}
+                  onClick={() => setHidden(m.id, true)}
+                  title={active === m.id ? "This is the model in use; choose another before hiding it." : "Hide from the list. Nothing is deleted; it can be shown again below."}
+                >
+                  <EyeOff size={14} />
                 </button>
-              ) : (
-                <button className="btn btn-sm btn-primary" onClick={() => void download(m.id)}>
-                  <Download size={13} /> Download
-                </button>
-              )}
+                {m.installed ? (
+                  <>
+                    {loaded.some((l) => l.id === m.id) ? (
+                      <button className="btn btn-sm" onClick={() => setConfirm({ action: "unload", id: m.id, name: shortModel(m.name) })} title="Free this model's memory. Nothing is deleted.">
+                        <Power size={13} /> Unload
+                      </button>
+                    ) : (
+                      <button className="btn btn-sm" disabled={loadingId !== null} onClick={() => setConfirm({ action: "load", id: m.id, name: shortModel(m.name) })} title="Load this model into memory now, so the next dictation does not wait for it.">
+                        <Zap size={13} /> {loadingId === m.id ? "Loading…" : "Load"}
+                      </button>
+                    )}
+                    <label className="auto-load" title="Load this model into memory every time the app starts">
+                      <span>Auto-load</span>
+                      <Switch id={`auto-${m.id}`} label={`Load ${shortModel(m.name)} when the app starts`} checked={autoIds.includes(m.id)} onChange={(v) => setAuto(m.id, v)} />
+                    </label>
+                  </>
+                ) : busy ? (
+                  <button className="btn btn-sm" onClick={() => void ipc.modelsCancel(m.id)}>
+                    <X size={13} /> Cancel
+                  </button>
+                ) : (
+                  <button className="btn btn-sm btn-primary" onClick={() => void download(m.id)}>
+                    <Download size={13} /> Download
+                  </button>
+                )}
+              </div>
             </div>
           );
         })}
       </div>
+      <div className="folder-block">
+        <div className="row-label has-icon">
+          <span className="row-icon" aria-hidden>
+            <Plus size={16} />
+          </span>
+          <span className="row-label-text">
+            Your own model
+            <span className="row-hint">
+              Any sherpa-onnx speech model folder: Whisper, Moonshine, a transducer, or a single-file NeMo / SenseVoice / Paraformer / Dolphin model. It is used where it is, never copied or deleted. For Arabic only, “sherpa-onnx-moonshine-base-ar-quantized” (about 120 MB) is much smaller than a large Whisper.
+            </span>
+          </span>
+        </div>
+        <div className="folder-actions">
+          <button className="btn btn-sm btn-primary" onClick={() => void addOwn()}>
+            <Plus size={13} /> Add your own model…
+          </button>
+        </div>
+      </div>
+      {hiddenModels.length > 0 && (
+        <div className="hidden-models">
+          <button className="hidden-toggle" aria-expanded={showHidden} onClick={() => setShowHidden((v) => !v)}>
+            {showHidden ? <ChevronDown size={14} /> : <ChevronRight size={14} />} Hidden models ({hiddenModels.length})
+          </button>
+          {showHidden &&
+            hiddenModels.map((m) => (
+              <div key={m.id} className="hidden-item">
+                <span className="hidden-name">
+                  {shortModel(m.name)} <span className="row-hint">· {m.kind}{m.installed ? "" : " · not downloaded"}</span>
+                </span>
+                <button className="btn btn-sm" onClick={() => setHidden(m.id, false)}>
+                  <Eye size={13} /> Show
+                </button>
+              </div>
+            ))}
+        </div>
+      )}
       {error && <ErrorNotice error={error} actions={<button className="btn btn-sm" onClick={() => setError(null)}><X size={13} /> Dismiss</button>} />}
+      {confirm && (
+        <Dialog
+          title={confirm.action === "load" ? `Load ${confirm.name}?` : `Unload ${confirm.name}?`}
+          onClose={() => setConfirm(null)}
+          actions={
+            <>
+              <button className="btn" onClick={() => setConfirm(null)}>
+                <X size={13} /> Cancel
+              </button>
+              <button
+                className="btn btn-primary"
+                onClick={() => {
+                  const { action, id } = confirm;
+                  setConfirm(null);
+                  void (action === "load" ? load(id) : unload(id));
+                }}
+              >
+                {confirm.action === "load" ? <Zap size={13} /> : <Power size={13} />} {confirm.action === "load" ? "Load" : "Unload"}
+              </button>
+            </>
+          }
+        >
+          <p>
+            {confirm.action === "load"
+              ? `${confirm.name} is read into memory (and onto the GPU when it is on). That takes a few seconds, and it stays loaded until you unload it.`
+              : `${confirm.name} leaves memory now. It loads again when a dictation needs it, or when the app starts if Auto-load is on. Nothing is deleted.`}
+          </p>
+        </Dialog>
+      )}
       {confirmDefault && (
         <Dialog
           title="Use the app's own models folder?"
@@ -310,10 +459,13 @@ function LanguageModelsTab({ settings, update }: { settings: Settings; update: (
     return () => void sub.then((u) => u());
   }, []);
 
-  const installed = models.filter((m) => m.installed);
+  const allInstalled = models.filter((m) => m.installed);
   // Same rule as the backend (and the Speech model tab) for the model used for all languages.
-  const downloaded = installed.filter((m) => !m.custom);
-  const fallbackId = installed.find((m) => m.id === settings.model)?.id ?? downloaded[downloaded.length - 1]?.id ?? installed[0]?.id;
+  const downloaded = allInstalled.filter((m) => !m.custom);
+  const fallbackId = allInstalled.find((m) => m.id === settings.model)?.id ?? downloaded[downloaded.length - 1]?.id ?? allInstalled[0]?.id;
+  // Hidden models are not offered here, unless one is already in use (the default, or chosen for a language).
+  const inUse = new Set([fallbackId, ...Object.values(settings.languageModels ?? {})]);
+  const installed = allInstalled.filter((m) => !(settings.hiddenModels ?? []).includes(m.id) || inUse.has(m.id));
   const defaultName = shortModel(installed.find((m) => m.id === fallbackId)?.name ?? "none installed");
   const modelName = (id: string) => shortModel(installed.find((m) => m.id === id)?.name ?? id);
   const modelOptions: SearchOption[] = installed.map((m) => ({ value: m.id, label: shortModel(m.name) }));
@@ -328,6 +480,8 @@ function LanguageModelsTab({ settings, update }: { settings: Settings; update: (
     return !q || `${langLabel(c)} ${c}`.toLowerCase().includes(q);
   });
   const searchable = total > 5;
+  // Few models: radio buttons. More than four: a drop-down, with a search box above five.
+  const asDropdown = installed.length > 4;
   const allPicked = listed.length > 0 && listed.every((c) => picked.includes(c));
   const toggle = (code: string) => setPicked((p) => (p.includes(code) ? p.filter((c) => c !== code) : [...p, code]));
   const setMany = (list: string[], id: string) =>
@@ -364,18 +518,24 @@ function LanguageModelsTab({ settings, update }: { settings: Settings; update: (
           <input type="checkbox" checked={allPicked} disabled={listed.length === 0} onChange={() => setPicked(allPicked ? picked.filter((c) => !listed.includes(c)) : [...new Set([...picked, ...listed])])} />
           {picked.length > 0 ? `${picked.length} selected` : "Select all"}
         </label>
-        <div className="lang-model-bulk-choices">
-          <span className="row-hint">{picked.length > 0 ? `Set ${picked.length} selected to` : "Tick languages to set them together"}</span>
-          {picked.length > 0 && (
-            <div className="segmented" role="group" aria-label="Model for the selected languages">
-              {withDefault.map((o) => (
-                <button key={o.value} type="button" onClick={() => setMany(picked, o.value)}>
-                  {o.value === "" ? "Default" : o.label}
-                </button>
-              ))}
-            </div>
-          )}
-        </div>
+        {asDropdown ? (
+          <div className="lang-model-bulk-select">
+            <SearchSelect label="Model for the selected languages" searchable={installed.length > 5} value="__pick" options={[{ value: "__pick", label: picked.length > 0 ? `Set model for ${picked.length} selected…` : "Tick languages to set them together" }, ...withDefault.map((o) => (o.value === "" ? { ...o, value: "__default" } : o))]} onChange={(v) => picked.length > 0 && v !== "__pick" && setMany(picked, v === "__default" ? "" : v)} />
+          </div>
+        ) : (
+          <div className="lang-model-bulk-choices">
+            <span className="row-hint">{picked.length > 0 ? `Set ${picked.length} selected to` : "Tick languages to set them together"}</span>
+            {picked.length > 0 && (
+              <div className="segmented" role="group" aria-label="Model for the selected languages">
+                {withDefault.map((o) => (
+                  <button key={o.value} type="button" onClick={() => setMany(picked, o.value)}>
+                    {o.value === "" ? "Default" : o.label}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
       </div>
       <div className="lang-model-list">
         {listed.map((code) => (
@@ -384,14 +544,18 @@ function LanguageModelsTab({ settings, update }: { settings: Settings; update: (
               <input type="checkbox" checked={picked.includes(code)} onChange={() => toggle(code)} />
               <span className="lang-model-name">{langLabel(code)}</span>
             </label>
-            <div className="lang-model-radios" role="radiogroup" aria-label={`Model for ${langLabel(code)}`}>
-              {[...withDefault, ...(map[code] && !modelOptions.some((o) => o.value === map[code]) ? [{ value: map[code], label: `${modelName(map[code])} (not installed)` }] : [])].map((o) => (
-                <label key={o.value} className="lang-radio">
-                  <input type="radio" name={`lm-${code}`} checked={(map[code] ?? "") === o.value} onChange={() => setMany([code], o.value)} />
-                  {o.value === "" ? "Default" : o.label}
-                </label>
-              ))}
-            </div>
+            {asDropdown ? (
+              <SearchSelect label={`Model for ${langLabel(code)}`} searchable={installed.length > 5} value={map[code] ?? ""} options={map[code] && !modelOptions.some((o) => o.value === map[code]) ? [...withDefault, { value: map[code], label: `${modelName(map[code])} (not installed)` }] : withDefault} onChange={(v) => setMany([code], v)} />
+            ) : (
+              <div className="lang-model-radios" role="radiogroup" aria-label={`Model for ${langLabel(code)}`}>
+                {[...withDefault, ...(map[code] && !modelOptions.some((o) => o.value === map[code]) ? [{ value: map[code], label: `${modelName(map[code])} (not installed)` }] : [])].map((o) => (
+                  <label key={o.value} className="lang-radio">
+                    <input type="radio" name={`lm-${code}`} checked={(map[code] ?? "") === o.value} onChange={() => setMany([code], o.value)} />
+                    {o.value === "" ? "Default" : o.label}
+                  </label>
+                ))}
+              </div>
+            )}
           </div>
         ))}
         {listed.length === 0 && <p className="row-hint" style={{ padding: 12, margin: 0 }}>No language matches.</p>}

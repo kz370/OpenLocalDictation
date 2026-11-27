@@ -162,6 +162,8 @@ pub struct ModelEntry {
     /// A model found in the models folder that is not in the catalog.
     pub custom: bool,
     pub path: Option<String>,
+    /// Model family: "Whisper", "Moonshine", ...
+    pub kind: String,
 }
 
 /// The model a dictation session will use.
@@ -172,12 +174,16 @@ pub struct Resolved {
     pub dir: PathBuf,
 }
 
-/// A Whisper folder found in the models folder that this app did not install.
+/// A model folder this app did not download: one found in the models folder,
+/// or one the user added by hand.
 #[derive(Debug, Clone)]
 pub struct CustomModel {
     pub id: String,
     pub name: String,
     pub dir: PathBuf,
+    pub kind: &'static str,
+    /// Added with "Add your own model" (not found by scanning).
+    pub added: bool,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -195,6 +201,8 @@ pub struct ModelStore {
     /// Folder holding the models; the user can point it at one shared with
     /// other apps. Catalog models live in `<root>/stt/<id>`.
     root: std::sync::RwLock<PathBuf>,
+    /// Folders the user added by hand ("Add your own model").
+    user: std::sync::RwLock<Vec<PathBuf>>,
     /// Where the embedded VAD model is written (always the app's own folder).
     vad_dir: PathBuf,
 }
@@ -208,12 +216,17 @@ impl ModelStore {
     pub fn with_vad_dir(root: PathBuf, vad_dir: PathBuf) -> Self {
         Self {
             root: std::sync::RwLock::new(root),
+            user: std::sync::RwLock::new(Vec::new()),
             vad_dir,
         }
     }
 
     pub fn root(&self) -> PathBuf {
         self.root.read().unwrap_or_else(|p| p.into_inner()).clone()
+    }
+
+    pub fn set_user_dirs(&self, dirs: Vec<PathBuf>) {
+        *self.user.write().unwrap_or_else(|p| p.into_inner()) = dirs;
     }
 
     pub fn set_root(&self, root: PathBuf) {
@@ -256,8 +269,9 @@ impl ModelStore {
             .collect()
     }
 
-    /// Whisper folders in the models folder (and its `stt` sub-folder) that are
-    /// not catalog installs: models the user already had, or another app put there.
+    /// Model folders that are not catalog installs: the ones in the models
+    /// folder (and its `stt` sub-folder), put there by the user or another app,
+    /// then the ones the user added by hand.
     pub fn custom_models(&self) -> Vec<CustomModel> {
         let root = self.root();
         let mut out: Vec<CustomModel> = Vec::new();
@@ -271,17 +285,41 @@ impl ModelStore {
                 if !dir.is_dir() || name.starts_with('.') || find(&name).is_some() {
                     continue;
                 }
-                if !is_whisper_folder(&dir) || out.iter().any(|m| m.dir == dir) {
+                let Some(files) = crate::stt::engine::detect(&dir) else {
+                    continue;
+                };
+                if out.iter().any(|m| m.dir == dir) {
                     continue;
                 }
                 out.push(CustomModel {
                     id: format!("custom:{}", dir.display()),
                     name,
                     dir,
+                    kind: files.kind.label(),
+                    added: false,
                 });
             }
         }
         out.sort_by_key(|m| m.name.to_lowercase());
+        let added = self.user.read().unwrap_or_else(|p| p.into_inner()).clone();
+        for dir in added {
+            let Some(files) = crate::stt::engine::detect(&dir) else {
+                continue; // moved or deleted since it was added
+            };
+            if out.iter().any(|m| m.dir == dir) {
+                continue;
+            }
+            out.push(CustomModel {
+                id: format!("custom:{}", dir.display()),
+                name: dir
+                    .file_name()
+                    .map(|n| n.to_string_lossy().to_string())
+                    .unwrap_or_else(|| dir.display().to_string()),
+                dir,
+                kind: files.kind.label(),
+                added: true,
+            });
+        }
         out
     }
 
@@ -441,17 +479,7 @@ impl ModelStore {
 /// True for a folder holding Whisper files (encoder + decoder + tokens, no
 /// joiner, which would make it a transducer this app cannot run).
 fn is_whisper_folder(dir: &Path) -> bool {
-    let has_joiner = std::fs::read_dir(dir)
-        .map(|it| {
-            it.flatten().any(|e| {
-                e.file_name()
-                    .to_string_lossy()
-                    .to_ascii_lowercase()
-                    .contains("joiner")
-            })
-        })
-        .unwrap_or(true);
-    !has_joiner && crate::stt::engine::detect(dir).is_some()
+    crate::stt::engine::detect(dir).is_some_and(|f| f.kind == crate::stt::engine::Kind::Whisper)
 }
 
 /// Joins a plain file name onto `root`, rejecting anything that could escape it.
@@ -558,7 +586,26 @@ mod tests {
         );
         mk(dir.path(), "notes", &["readme.txt"]);
         let found: Vec<String> = store.custom_models().into_iter().map(|m| m.name).collect();
-        assert_eq!(found, vec!["my-whisper", "other-whisper"]);
+        // A transducer folder is a model the app can run too; "notes" is not one.
+        assert_eq!(found, vec!["my-whisper", "other-whisper", "parakeet"]);
+        // A folder added by hand is listed (once) after the scanned ones.
+        let own = tempfile::tempdir().unwrap();
+        mk(
+            own.path(),
+            "sherpa-onnx-moonshine-base-ar",
+            &[
+                "encoder_model.ort",
+                "decoder_model_merged.ort",
+                "tokens.txt",
+            ],
+        );
+        let moon = own.path().join("sherpa-onnx-moonshine-base-ar");
+        store.set_user_dirs(vec![moon.clone(), moon.clone(), dir.path().join("gone")]);
+        let all = store.custom_models();
+        let added: Vec<_> = all.iter().filter(|m| m.added).collect();
+        assert_eq!(added.len(), 1);
+        assert_eq!(added[0].kind, "Moonshine");
+        store.set_user_dirs(Vec::new());
         // With nothing downloaded a custom model is picked; a chosen one wins.
         let first = store.resolve("").unwrap();
         assert_eq!(first.name, "my-whisper");

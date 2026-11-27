@@ -25,6 +25,9 @@ Settings (settings.rs, stored in <data>\settings.json; unknown/missing fields fa
   overlayOrbShift      i32      0                       bubble style: mic circle offset from the window center, logical px (clamped -2000..2000)
   overlaySizeLocked    bool     false                   no resize handle on the small overlay
   overlayStyle         string   "pill"                  small overlay look: pill | bubble (mic circle, pill above on hover/use)
+  hiddenModels         string[] []                     model ids hidden from the Settings lists (stay installed; only the list changes)
+  userModels           string[] []                     folders added with "Add your own model" (set by models_add_own only; save_settings keeps them)
+  autoLoadModels       string[]? null                  model ids loaded when the app starts; null = never chosen: the default model and the one for the dictation language
   languageModels       map<string,string> {}            model id per language code; a language without an entry (and "auto") uses `model`; empty/"auto" keys and empty ids are dropped by sanitize
   taskbarWidget        bool     false                   mic button inside the Windows taskbar (bottom taskbar only); the pill opens above it, and the app's own floating circle/pill is not shown while it is on
   taskbarWidgetX       i32?     null                    taskbar button position: logical px from the taskbar's left edge; null until first placed, then fixed (set by dragging or by the first default placement), clamped 0 .. 16000
@@ -37,7 +40,8 @@ Settings (settings.rs, stored in <data>\settings.json; unknown/missing fields fa
 
 AppInfo            { version, paths{dataDir, logsDir}, hasNvidia, gpuName?, modelsDir, defaultModelsDir }
 AudioDevice        { id, name, isDefault }
-ModelEntry         { id, name, blurb, downloadBytes, installed, downloading, custom, path? }
+LoadedModel        { id, name, kind, device: "gpu"|"cpu", gpuBlocked, language }   (stt::LoadedModel; one entry per model in memory)
+ModelEntry         { id, name, blurb, downloadBytes, installed, downloading, custom, path?, kind }
 DownloadProgress   { modelId, state: downloading|verifying|done|error|cancelled, downloadedBytes, totalBytes, error? }
 GpuStatus          { supported, gpuName?, installed, sizeBytes, downloadBytes, active, restartRequired, reusable }
 GpuProgress        { state: downloading|extracting|done|error|cancelled, downloadedBytes, totalBytes, error? }
